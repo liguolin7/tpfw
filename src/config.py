@@ -16,4 +16,31 @@ VAL_RATIO = 0.15
 TEST_RATIO = 0.15
 
 # 模型参数
-RANDOM_STATE = 42 
+RANDOM_STATE = 42
+
+# 模型配置
+MODELS = {
+    'LinearRegression': {
+        'name': '线性回归'
+    },
+    'RandomForest': {
+        'name': '随机森林',
+        'params': {
+            'n_estimators': 100,
+            'random_state': RANDOM_STATE,
+            'n_jobs': -1
+        }
+    },
+    'LSTM': {
+        'name': 'LSTM',
+        'params': {
+            'units': [50, 30],
+            'batch_size': 32,
+            'epochs': 1,
+            'patience': 1
+        }
+    }
+}
+
+# 实验配置
+EXPERIMENT_TYPES = ['baseline', 'enhanced']

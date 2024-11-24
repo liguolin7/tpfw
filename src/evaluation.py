@@ -8,33 +8,20 @@ from config import RESULTS_DIR
 import logging
 
 def evaluate_model(y_true, y_pred, model_name):
-    """Evaluate model performance and save results
-    
-    Args:
-        y_true: True values
-        y_pred: Predicted values
-        model_name: Model name
-    Returns:
-        dict: Dictionary containing evaluation metrics
-    """
-    metrics = {
-        'mae': mean_absolute_error(y_true, y_pred),
-        'rmse': np.sqrt(mean_squared_error(y_true, y_pred)),
-        'r2': r2_score(y_true, y_pred),
-        'mape': mean_absolute_percentage_error(y_true, y_pred)
+    """评估模型性能并返回结果"""
+    results = {
+        'test_rmse': np.sqrt(mean_squared_error(y_true, y_pred)),
+        'test_mae': mean_absolute_error(y_true, y_pred),
+        'test_r2': r2_score(y_true, y_pred)
     }
     
-    # Record evaluation results
+    # 记录评估结果
     logging.info(f"\n{model_name} Evaluation Results:")
-    for metric, value in metrics.items():
-        logging.info(f"{metric.upper()}: {value:.4f}")
+    logging.info(f"MAE: {results['test_mae']:.4f}")
+    logging.info(f"RMSE: {results['test_rmse']:.4f}")
+    logging.info(f"R2: {results['test_r2']:.4f}")
     
-    # Save evaluation results to CSV
-    results_df = pd.DataFrame([metrics], index=[model_name])
-    results_path = os.path.join(RESULTS_DIR, 'metrics', f'{model_name}_metrics.csv')
-    results_df.to_csv(results_path)
-    
-    return metrics
+    return results
 
 def plot_predictions(y_true, y_pred, model_name):
     """Plot prediction results comparison"""
@@ -120,4 +107,31 @@ def plot_feature_importance(model, feature_names, model_name):
     save_path = os.path.join(RESULTS_DIR, 'figures', f'{model_name}_feature_importance.png')
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
+    
+def find_best_model(improvements):
+    """根据性能提升找出最佳模型
+    
+    Args:
+        improvements: 性能提升分析结果
+    """
+    model_scores = {}
+    
+    # 计算每个模型的综合得分
+    for model, metrics in improvements.items():
+        # 根据RMSE和MAE的降低程度以及R2的提升程度计算得分
+        rmse_score = metrics['rmse_improvement']
+        mae_score = metrics['mae_improvement']
+        r2_score = metrics['r2_improvement']
+        
+        # 综合得分（可以根据需要调整权重）
+        model_scores[model] = (rmse_score + mae_score + r2_score) / 3
+    
+    # 找出得分最高的模型
+    best_model = max(model_scores.items(), key=lambda x: x[1])
+    
+    logging.info("\n最佳模型分析结果:")
+    logging.info(f"最佳模型: {best_model[0]}")
+    logging.info(f"平均性能提升: {best_model[1]:.2f}%")
+    
+    return best_model[0]
     

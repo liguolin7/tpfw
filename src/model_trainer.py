@@ -7,21 +7,13 @@ from config import *
 import os
 
 def train_and_evaluate_models(X_train, X_val, X_test, y_train, y_val, y_test, feature_names):
-    """训练和评估多个模型
-    
-    Args:
-        X_train, X_val, X_test: 特征数据
-        y_train, y_val, y_test: 目标变量
-        feature_names: 特征名列表
-    Returns:
-        评估结果字典
-    """
+    """训练和评估多个模型"""
     models = {
         'RandomForest': RandomForestRegressor(n_estimators=100, random_state=RANDOM_STATE),
         'GradientBoosting': GradientBoostingRegressor(n_estimators=100, random_state=RANDOM_STATE)
     }
     
-    results = []
+    results = {}
     
     for name, model in models.items():
         logging.info(f"训练{name}模型...")
@@ -41,26 +33,14 @@ def train_and_evaluate_models(X_train, X_val, X_test, y_train, y_val, y_test, fe
         test_mae = mean_absolute_error(y_test, test_pred)
         test_r2 = r2_score(y_test, test_pred)
         
-        # 特征重要性
-        feature_importance = pd.DataFrame({
-            'feature': feature_names,
-            'importance': model.feature_importances_
-        }).sort_values('importance', ascending=False)
-        
-        # 保存特征重要性
-        feature_importance.to_csv(
-            os.path.join(RESULTS_DIR, 'feature_importance', f'{name}_feature_importance.csv')
-        )
-        
-        results.append({
-            'model': name,
+        results[name] = {
             'val_rmse': val_rmse,
             'val_mae': val_mae,
             'val_r2': val_r2,
             'test_rmse': test_rmse,
             'test_mae': test_mae,
             'test_r2': test_r2
-        })
+        }
         
         logging.info(f"{name}模型评估完成")
     

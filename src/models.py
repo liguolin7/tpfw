@@ -48,7 +48,7 @@ class BaselineModels:
         model.summary()
         return model
         
-    def train_lstm(self, X_train, y_train, X_val, y_val, epochs=100, batch_size=32):
+    def train_lstm(self, X_train, y_train, X_val, y_val, epochs=1, batch_size=32):
         """训练LSTM模型"""
         if self.lstm_model is None:
             raise ValueError("LSTM模型未创建，请先调用create_lstm_model")

@@ -180,3 +180,47 @@ class DataProcessor:
         logging.info(f"测试集大小: {len(X_test)}")
         
         return X_train, X_val, X_test, y_train, y_val, y_test
+        
+    def prepare_baseline_data(self, traffic_df):
+        """准备基础实验数据（仅使用交通数据）"""
+        logging.info("准备基础实验数据...")
+        
+        # 处理交通数据
+        processed_df = self.process_traffic_data(traffic_df)
+        
+        # 创建基础特征
+        baseline_df = self.create_baseline_features(processed_df)
+        
+        return baseline_df
+        
+    def prepare_enhanced_data(self, traffic_df, weather_df):
+        """准备增强实验数据（使用交通+天气数据）"""
+        logging.info("准备增强实验数据...")
+        
+        # 处理两种数据
+        processed_traffic = self.process_traffic_data(traffic_df)
+        processed_weather = self.process_weather_data(weather_df)
+        
+        # 合并数据
+        merged_df = self.align_and_merge_data(processed_traffic, processed_weather)
+        
+        # 创建增强特征
+        enhanced_df = self.create_features(merged_df)
+        
+        return enhanced_df
+        
+    def create_baseline_features(self, df):
+        """创建基础特征（仅使用交通数据）"""
+        logging.info("开始基础特征工程...")
+        
+        # 仅创建基于交通数据的特征
+        df['speed_lag1'] = df['avg_speed'].shift(1)
+        df['speed_ma5'] = df['avg_speed'].rolling(window=5).mean()
+        df['speed_ma10'] = df['avg_speed'].rolling(window=10).mean()
+        df['is_rush_hour'] = df['hour'].apply(
+            lambda x: 1 if (x >= 7 and x <= 9) or (x >= 16 and x <= 18) else 0
+        )
+        df['is_weekend'] = df['dayofweek'].apply(lambda x: 1 if x >= 5 else 0)
+        
+        df = df.dropna()
+        return df
