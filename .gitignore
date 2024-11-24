@@ -1,0 +1,12 @@
+# 忽略虚拟环境文件夹
+venv/
+env/
+
+# 忽略Mac系统文件
+.DS_Store
+
+# 忽略数据文件
+data/
+
+# 忽略Jupyter Notebook的检查点文件
+.ipynb_checkpoints/
