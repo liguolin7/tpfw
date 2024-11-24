@@ -1,12 +1,43 @@
-# 忽略虚拟环境文件夹
-venv/
-env/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
 
-# 忽略Mac系统文件
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environment
+traffic_env/
+venv/
+ENV/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# macOS
 .DS_Store
 
-# 忽略数据文件
-data/
+# IDE
+.idea/
+.vscode/
 
-# 忽略Jupyter Notebook的检查点文件
-.ipynb_checkpoints/
+# Data files
+data/raw/*.csv
+data/processed/*.csv
+
+# Model files
+*.h5
+*.pkl
+
+# Logs
+logs/
+*.log
+
+# Results
+results/figures/*
+results/metrics/*
+!results/figures/.gitkeep
+!results/metrics/.gitkeep
