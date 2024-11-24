@@ -1,11 +1,13 @@
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.ensemble import RandomForestRegressor
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
+from tensorflow.keras.layers import LSTM, Dense, Dropout, BatchNormalization
+from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 import numpy as np
 import logging
 from config import RANDOM_STATE
+from tqdm import tqdm
 
 class BaselineModels:
     def __init__(self):
@@ -18,35 +20,80 @@ class BaselineModels:
         self.lstm_model = None
         
     def train_linear_regression(self, X_train, y_train):
-        """训练线性回归模型"""
+        """训练带有正则化的线性回归模型"""
         logging.info("训练线性回归模型...")
-        self.lr_model.fit(X_train, y_train)
-        score = self.lr_model.score(X_train, y_train)
-        logging.info(f"线性回归训练集 R2 分数: {score:.4f}")
+        self.lr_model = Ridge(
+            alpha=1.0,  # 正则化强度
+            random_state=42
+        )
+        
+        try:
+            with tqdm(total=1, desc="LR Training") as pbar:
+                self.lr_model.fit(X_train, y_train)
+                score = self.lr_model.score(X_train, y_train)
+                pbar.update(1)
+            
+            logging.info(f"线性回归训练集 R2 分数: {score:.4f}")
+        except Exception as e:
+            logging.error(f"线性回归训练失败: {str(e)}")
+            raise
         
     def train_random_forest(self, X_train, y_train):
         """训练随机森林模型"""
         logging.info("训练随机森林模型...")
-        self.rf_model.fit(X_train, y_train)
-        score = self.rf_model.score(X_train, y_train)
-        logging.info(f"随机森林训练集 R2 分数: {score:.4f}")
+        
+        # 限制树的数量和深度，避免过度消耗内存和计算资源
+        self.rf_model = RandomForestRegressor(
+            n_estimators=50,  # 减少树的数量
+            max_depth=10,     # 限制树的深度
+            min_samples_split=5,
+            min_samples_leaf=2,
+            random_state=RANDOM_STATE,
+            n_jobs=4  # 限制并行数，避免占用过多CPU
+        )
+        
+        try:
+            with tqdm(total=1, desc="RF Training") as pbar:
+                self.rf_model.fit(X_train, y_train)
+                score = self.rf_model.score(X_train, y_train)
+                pbar.update(1)
+            
+            logging.info(f"随机森林训练集 R2 分数: {score:.4f}")
+        except Exception as e:
+            logging.error(f"随机森林训练失败: {str(e)}")
+            raise
         
     def create_lstm_model(self, input_shape):
-        """创建LSTM模型"""
-        logging.info(f"创建LSTM模型，输入形状: {input_shape}")
-        model = Sequential([
-            LSTM(50, input_shape=input_shape, return_sequences=True),
-            LSTM(30),
+        """创建改进的LSTM模型"""
+        self.lstm_model = Sequential([
+            # 第一个LSTM层
+            LSTM(100, input_shape=input_shape, return_sequences=True),
+            BatchNormalization(),
+            Dropout(0.2),
+            
+            # 第二个LSTM层
+            LSTM(50, return_sequences=False),
+            BatchNormalization(),
+            Dropout(0.2),
+            
+            # 全连接层
+            Dense(25, activation='relu'),
+            BatchNormalization(),
+            Dropout(0.1),
+            
+            # 输出层
             Dense(1)
         ])
-        model.compile(
-            optimizer='adam',
-            loss='mse',
+        
+        # 编译模型
+        self.lstm_model.compile(
+            optimizer=Adam(learning_rate=0.001),
+            loss='huber',  # 使用Huber损失函数，对异常值更稳健
             metrics=['mae']
         )
-        self.lstm_model = model
-        model.summary()
-        return model
+        
+        logging.info(f"创建LSTM模型，输入形状: {input_shape}")
+        self.lstm_model.summary()
         
     def train_lstm(self, X_train, y_train, X_val, y_val, epochs=1, batch_size=32):
         """训练LSTM模型"""
@@ -90,3 +137,12 @@ class BaselineModels:
         if self.lstm_model is None:
             raise ValueError("LSTM模型未训练")
         return self.lstm_model.predict(X).flatten()  # 展平预测结果
+        
+    def get_model(self, model_name):
+        """获取指定名称的模型对象"""
+        model_map = {
+            'LinearRegression': self.lr_model,
+            'RandomForest': self.rf_model,
+            'LSTM': self.lstm_model
+        }
+        return model_map.get(model_name)

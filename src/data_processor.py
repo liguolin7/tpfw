@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from config import *
 import logging
+from tqdm import tqdm
 
 class DataProcessor:
     def __init__(self):
@@ -138,15 +139,12 @@ class DataProcessor:
         return df
         
     def split_data(self, df, target_col='avg_speed'):
-        """划分数据集
-        
-        Args:
-            df: 特征工程后的DataFrame
-            target_col: 目标变量列名
-        Returns:
-            X_train, X_val, X_test, y_train, y_val, y_test
-        """
+        """划分数据集"""
         logging.info("开始划分数据集...")
+        
+        # 对数据进行采样，减少数据量
+        if len(df) > 50000:
+            df = df.sample(n=50000, random_state=RANDOM_STATE)
         
         # 计算划分点
         n = len(df)
@@ -155,18 +153,18 @@ class DataProcessor:
         
         # 分离特征和目标变量
         feature_cols = [col for col in df.columns if col != target_col]
-        X = df[feature_cols]
-        y = df[target_col]
+        X = df[feature_cols].copy()  # 使用.copy()避免SettingWithCopyWarning
+        y = df[target_col].copy()
         
         # 按时间顺序划分数据集
-        X_train = X[:train_size]
-        y_train = y[:train_size]
+        X_train = X[:train_size].copy()
+        y_train = y[:train_size].copy()
         
-        X_val = X[train_size:train_size + val_size]
-        y_val = y[train_size:train_size + val_size]
+        X_val = X[train_size:train_size + val_size].copy()
+        y_val = y[train_size:train_size + val_size].copy()
         
-        X_test = X[train_size + val_size:]
-        y_test = y[train_size + val_size:]
+        X_test = X[train_size + val_size:].copy()
+        y_test = y[train_size + val_size:].copy()
         
         # 标准化特征
         numeric_features = X_train.select_dtypes(include=['float64', 'int64']).columns
@@ -181,12 +179,18 @@ class DataProcessor:
         
         return X_train, X_val, X_test, y_train, y_val, y_test
         
-    def prepare_baseline_data(self, traffic_df):
-        """准备基础实验数据（仅使用交通数据）"""
+    def prepare_baseline_data(self, traffic_data):
+        """准备基础实验数据"""
         logging.info("准备基础实验数据...")
+        logging.info("开始处理交通数据...")
+        
+        # 使用tqdm包装迭代过程
+        for col in tqdm(traffic_data.columns, desc="处理交通数据特征"):
+            # 处理每列数据
+            ...
         
         # 处理交通数据
-        processed_df = self.process_traffic_data(traffic_df)
+        processed_df = self.process_traffic_data(traffic_data)
         
         # 创建基础特征
         baseline_df = self.create_baseline_features(processed_df)
