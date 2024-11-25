@@ -7,7 +7,7 @@ from sklearn.ensemble import RandomForestRegressor
 from tensorflow.keras.layers import (
     LSTM, Dense, Dropout, BatchNormalization,
     GRU, Input, MultiHeadAttention, LayerNormalization,
-    GlobalAveragePooling1D
+    GlobalAveragePooling1D, Conv1D, MaxPooling1D
 )
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.optimizers import Adam
@@ -20,7 +20,7 @@ class BaselineModels:
     def __init__(self):
         self.lstm_model = None
         self.gru_model = None
-        self.transformer_model = None
+        self.cnn_lstm_model = None
         
     def create_lstm_model(self, input_shape):
         """创建更复杂的LSTM模型"""
@@ -136,47 +136,42 @@ class BaselineModels:
             logging.error(f"创建GRU模型时出错: {str(e)}")
             raise
         
-    def create_transformer_model(self, input_shape):
-        """创建改进的Transformer模型"""
-        config = MODEL_CONFIG['Transformer']
+    def create_cnn_lstm_model(self, input_shape):
+        """创建CNN-LSTM混合模型"""
+        config = MODEL_CONFIG['CNN_LSTM']
         
-        inputs = Input(shape=input_shape)
-        
-        # 添加位置编码
-        pos_encoding = self.positional_encoding(input_shape[0], input_shape[1])
-        x = inputs + pos_encoding
-        
-        # 多层Transformer块
-        for _ in range(3):  # 增加层数
-            # Multi-head attention
-            attention_output = MultiHeadAttention(
-                num_heads=config['num_heads'],
-                key_dim=config['head_size']
-            )(x, x)
+        model = Sequential([
+            # CNN层
+            Conv1D(
+                filters=config['cnn_filters'][0],
+                kernel_size=config['cnn_kernel_size'],
+                activation='relu',
+                input_shape=input_shape
+            ),
+            MaxPooling1D(pool_size=2),
+            BatchNormalization(),
             
-            # Add & Norm
-            x = LayerNormalization(epsilon=1e-6)(attention_output + x)
+            Conv1D(
+                filters=config['cnn_filters'][1],
+                kernel_size=config['cnn_kernel_size'],
+                activation='relu'
+            ),
+            MaxPooling1D(pool_size=2),
+            BatchNormalization(),
             
-            # Feed Forward Network
-            ffn = Sequential([
-                Dense(config['ff_dim'], activation='relu'),
-                Dropout(config['dropout']),
-                Dense(input_shape[-1])
-            ])
+            # LSTM层
+            LSTM(config['lstm_units'][0], return_sequences=True),
+            Dropout(config['dropout']),
+            BatchNormalization(),
             
-            ffn_output = ffn(x)
-            x = LayerNormalization(epsilon=1e-6)(ffn_output + x)
+            LSTM(config['lstm_units'][1]),
+            Dropout(config['dropout']),
+            BatchNormalization(),
+            
+            Dense(32, activation='relu'),
+            Dense(1)
+        ])
         
-        # Global pooling
-        x = GlobalAveragePooling1D()(x)
-        x = Dropout(config['dropout'])(x)
-        
-        # Final dense layers
-        x = Dense(64, activation='relu')(x)
-        x = Dropout(config['dropout'])(x)
-        outputs = Dense(1)(x)
-        
-        model = Model(inputs=inputs, outputs=outputs)
         model.compile(
             optimizer=Adam(learning_rate=config['learning_rate']),
             loss=config['loss'],
@@ -184,21 +179,40 @@ class BaselineModels:
         )
         
         return model
+    
+    def train_cnn_lstm(self, X_train, y_train, X_val, y_val):
+        """训练CNN-LSTM模型"""
+        if self.cnn_lstm_model is None:
+            self.cnn_lstm_model = self.create_cnn_lstm_model((X_train.shape[1], 1))
+            
+        train_config = TRAINING_CONFIG
+        callbacks = [
+            tf.keras.callbacks.EarlyStopping(**train_config['early_stopping']),
+            tf.keras.callbacks.ReduceLROnPlateau(**train_config['lr_scheduler'])
+        ]
         
-    def positional_encoding(self, length, depth):
-        """添加位置编码"""
-        positions = np.arange(length)[:, np.newaxis]
-        depths = np.arange(depth)[np.newaxis, :]/depth
-        
-        angle_rates = 1 / (10000**depths)
-        angle_rads = positions * angle_rates
-        
-        pos_encoding = np.concatenate(
-            [np.sin(angle_rads), np.cos(angle_rads)],
-            axis=-1
+        history = self.cnn_lstm_model.fit(
+            X_train, y_train,
+            validation_data=(X_val, y_val),
+            epochs=train_config['max_epochs'],
+            batch_size=train_config['batch_size'],
+            callbacks=callbacks,
+            verbose=1
         )
         
-        return tf.cast(pos_encoding, dtype=tf.float32)
+        return history
+    
+    def predict_cnn_lstm(self, X):
+        """CNN-LSTM模型预测"""
+        if self.cnn_lstm_model is None:
+            raise ValueError("CNN-LSTM模型未训练")
+        
+        if isinstance(X, np.ndarray):
+            X_reshaped = X
+        else:
+            X_reshaped = X.values.reshape((X.shape[0], X.shape[1], 1))
+        
+        return self.cnn_lstm_model.predict(X_reshaped).flatten()
         
     def train_gru(self, X_train, y_train, X_val, y_val):
         """训练GRU模型"""

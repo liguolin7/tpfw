@@ -20,7 +20,7 @@ RANDOM_STATE = 42
 
 # 性能优化参数
 TRAINING_CONFIG = {
-    'batch_size': 32,
+    'batch_size': 512,
     'max_epochs': 100,
     'early_stopping': {
         'monitor': 'val_loss',
@@ -54,10 +54,10 @@ MODEL_CONFIG = {
         'loss': 'mse',
         'metrics': ['mae']
     },
-    'Transformer': {
-        'head_size': 64,
-        'num_heads': 8,
-        'ff_dim': 256,
+    'CNN_LSTM': {
+        'cnn_filters': [64, 32],
+        'cnn_kernel_size': 3,
+        'lstm_units': [64, 32],
         'dropout': 0.2,
         'learning_rate': 0.001,
         'loss': 'mse',
@@ -67,3 +67,11 @@ MODEL_CONFIG = {
 
 # 实验配置
 EXPERIMENT_TYPES = ['baseline', 'enhanced']
+
+# 可视化配置
+VISUALIZATION_CONFIG = {
+    'figure_size': (12, 8),
+    'style': 'seaborn',
+    'color_palette': 'Set2',
+    'dpi': 300
+}

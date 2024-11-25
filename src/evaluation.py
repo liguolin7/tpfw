@@ -140,10 +140,11 @@ def find_best_model(improvements):
     
 def plot_model_comparison(baseline_results, enhanced_results, metrics=['rmse', 'mae', 'r2', 'mape']):
     """绘制基础模型和增强模型的性能对比图"""
-    plt.figure(figsize=(15, 5 * len(metrics)))
+    fig, axes = plt.subplots(2, 2, figsize=(20, 16))
+    axes = axes.ravel()
     
-    for i, metric in enumerate(metrics, 1):
-        plt.subplot(len(metrics), 1, i)
+    for i, metric in enumerate(metrics):
+        ax = axes[i]
         
         models = list(baseline_results.keys())
         baseline_values = [baseline_results[model][metric] for model in models]
@@ -156,29 +157,30 @@ def plot_model_comparison(baseline_results, enhanced_results, metrics=['rmse', '
         improvements = [(e - b) / b * 100 if metric != 'r2' else (abs(e) - abs(b)) / abs(b) * 100
                        for b, e in zip(baseline_values, enhanced_values)]
         
-        bars1 = plt.bar(x - width/2, baseline_values, width, label='Baseline', color='skyblue')
-        bars2 = plt.bar(x + width/2, enhanced_values, width, label='Enhanced', color='lightgreen')
+        bars1 = ax.bar(x - width/2, baseline_values, width, label='Baseline', color='skyblue')
+        bars2 = ax.bar(x + width/2, enhanced_values, width, label='Enhanced', color='lightgreen')
         
         # 添加数值标签
         for bars in [bars1, bars2]:
             for bar in bars:
                 height = bar.get_height()
-                plt.text(bar.get_x() + bar.get_width()/2., height,
-                        f'{height:.2f}',
-                        ha='center', va='bottom')
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       f'{height:.2f}',
+                       ha='center', va='bottom')
         
         # 添加改进百分比
         for idx, imp in enumerate(improvements):
-            plt.text(x[idx], max(baseline_values[idx], enhanced_values[idx]),
-                    f'{imp:+.2f}%',
-                    ha='center', va='bottom', color='red')
+            ax.text(x[idx], max(baseline_values[idx], enhanced_values[idx]),
+                   f'{imp:+.2f}%',
+                   ha='center', va='bottom', color='red')
         
-        plt.title(f'{metric.upper()} Comparison')
-        plt.xlabel('Models')
-        plt.ylabel(metric.upper())
-        plt.xticks(x, models)
-        plt.legend()
-        plt.grid(True, alpha=0.3)
+        ax.set_title(f'{metric.upper()} Comparison', fontsize=14)
+        ax.set_xlabel('Models', fontsize=12)
+        ax.set_ylabel(metric.upper(), fontsize=12)
+        ax.set_xticks(x)
+        ax.set_xticklabels(models)
+        ax.legend()
+        ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
     save_path = os.path.join(RESULTS_DIR, 'figures', 'model_comparison.png')
@@ -356,3 +358,72 @@ def shap_analysis(model, X_test, feature_names, model_name):
     plt.close()
     
     return shap_values    
+
+def plot_training_history(history, model_name):
+    """绘制模型训练历史
+    
+    Args:
+        history: 模型训练历史对象
+        model_name: 模型名称
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    
+    # 损失曲线
+    ax1.plot(history.history['loss'], label='Training Loss')
+    ax1.plot(history.history['val_loss'], label='Validation Loss')
+    ax1.set_title(f'{model_name} Training Loss')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    ax1.legend()
+    ax1.grid(True)
+    
+    # MAE曲线
+    ax2.plot(history.history['mae'], label='Training MAE')
+    ax2.plot(history.history['val_mae'], label='Validation MAE')
+    ax2.set_title(f'{model_name} Training MAE')
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('MAE')
+    ax2.legend()
+    ax2.grid(True)
+    
+    plt.tight_layout()
+    save_path = os.path.join(RESULTS_DIR, 'figures', f'{model_name}_training_history.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+def analyze_weather_features(df, weather_features, target='avg_speed'):
+    """分析天气特征与目标变量的关系
+    
+    Args:
+        df: 包含天气特征的数据框
+        weather_features: 天气特征列表
+        target: 目标变量名称
+    """
+    # 相关性分析
+    plt.figure(figsize=(12, 8))
+    corr = df[weather_features + [target]].corr()
+    sns.heatmap(corr, annot=True, cmap='coolwarm', center=0)
+    plt.title('Weather Features Correlation with Traffic Speed')
+    save_path = os.path.join(RESULTS_DIR, 'figures', 'weather_correlation.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # 天气特征箱线图
+    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+    axes = axes.ravel()
+    
+    for idx, feature in enumerate(weather_features[:4]):
+        sns.boxplot(data=df, y=feature, ax=axes[idx])
+        axes[idx].set_title(f'Distribution of {feature}')
+    
+    plt.tight_layout()
+    save_path = os.path.join(RESULTS_DIR, 'figures', 'weather_distributions.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # 散点图矩阵
+    sns.pairplot(df[weather_features + [target]], diag_kind='kde')
+    save_path = os.path.join(RESULTS_DIR, 'figures', 'weather_pairplot.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    

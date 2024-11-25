@@ -77,7 +77,7 @@ def train_and_evaluate_models(X_train, X_val, X_test, y_train, y_val, y_test, fe
     model_configs = [
         ('LSTM', (models.train_lstm, models.predict_lstm)),
         ('GRU', (models.train_gru, models.predict_gru)),
-        ('Transformer', (models.train_transformer, models.predict_transformer))
+        ('CNN_LSTM', (models.train_cnn_lstm, models.predict_cnn_lstm))
     ]
     
     for model_name, (train_func, predict_func) in model_configs:
@@ -168,6 +168,13 @@ def main():
 
 def run_single_experiment(processor, data, experiment_name):
     """运行单个实验"""
+    # 获取天气特征列表
+    weather_features = [col for col in data.columns if col.startswith(('temp_', 'humidity_', 'precip_', 'wind_'))]
+    
+    # 在训练模型之前进行天气特征分析
+    if experiment_name == 'enhanced':
+        analyze_weather_features(data, weather_features)
+    
     # 划分数据集
     X_train, X_val, X_test, y_train, y_val, y_test = processor.split_data(data)
     feature_names = X_train.columns.tolist()
@@ -233,7 +240,7 @@ def print_experiment_summary(baseline_results, enhanced_results, improvements):
     logging.info("=" * 50)
     
     metrics = ['rmse', 'mae', 'r2', 'mape']
-    models = ['LSTM', 'GRU', 'Transformer']
+    models = ['LSTM', 'GRU', 'CNN_LSTM']
     
     # 只输出一次性能提升结果
     logging.info("\n性能提升结果:")
@@ -248,6 +255,30 @@ def print_experiment_summary(baseline_results, enhanced_results, improvements):
     avg_improvement = calculate_average_improvement(improvements[best_model])
     logging.info(f"\n最佳模型: {best_model}")
     logging.info(f"平均性能提升: {avg_improvement:.2f}%")
+
+def configure_hardware():
+    """配置 M1 MacBook 的硬件优化"""
+    try:
+        # 检测是否支持 Metal
+        devices = tf.config.list_physical_devices()
+        print("可用设备:", devices)
+        
+        # 对于 M1，使用 Metal 插件
+        if len(devices) > 0:
+            # 启用内存增长
+            for device in devices:
+                tf.config.experimental.set_memory_growth(device, True)
+        
+        # M1 优化的混合精度设置
+        # 注意：M1 上使用 'mixed_float16' 可能会有兼容性问题
+        # 建议使用默认精度设置
+        
+        # 设置线程优化
+        tf.config.threading.set_inter_op_parallelism_threads(2)
+        tf.config.threading.set_intra_op_parallelism_threads(4)
+        
+    except Exception as e:
+        print(f"硬件配置出错: {e}")
 
 if __name__ == "__main__":
     main() 
