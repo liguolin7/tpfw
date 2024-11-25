@@ -10,60 +10,75 @@ from tqdm import tqdm
 import shap
 from sklearn.model_selection import KFold
 import tensorflow as tf
+from config import PROCESSED_DATA_DIR, RESULTS_DIR, RANDOM_SEED
+import random
+import datetime
+from evaluation import plot_training_history, shap_analysis
+
+# 固定随机种子
+RANDOM_SEED = 42
+os.environ['PYTHONHASHSEED'] = str(RANDOM_SEED)
+random.seed(RANDOM_SEED)
+np.random.seed(RANDOM_SEED)
+tf.random.set_seed(RANDOM_SEED)
 
 def setup_logging():
-    """配置日志输出"""
-    formatter = logging.Formatter(
-        '%(asctime)s | %(levelname)s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    
-    # 创建logs和results目录
+    """设置日志配置"""
+    # 创建必要的目录
     log_dir = 'logs'
     results_dir = 'results/experiment_outputs'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(results_dir, exist_ok=True)
     
-    # 设置日志文件路径
-    log_file = os.path.join(log_dir, 'experiment.log')
-    output_file = os.path.join(results_dir, 'experiment_output.txt')
-    
-    # 配置日志格式
+    # 设置日志格式
     formatter = logging.Formatter('%(asctime)s | %(message)s', datefmt='%H:%M:%S')
     
-    # 文件处理器
-    file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(logging.INFO)
-    
-    # 输出结果处理器
-    output_handler = logging.FileHandler(output_file, mode='w', encoding='utf-8')
-    output_handler.setFormatter(formatter)
-    output_handler.setLevel(logging.INFO)
-    
-    # 控制台处理器
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    console_handler.setLevel(logging.INFO)
+    # 配置处理器
+    handlers = [
+        logging.FileHandler(os.path.join(log_dir, 'experiment.log'), mode='w', encoding='utf-8'),
+        logging.FileHandler(os.path.join(results_dir, 'experiment_output.txt'), mode='w', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
     
     # 配置根日志记录器
     logging.basicConfig(
         level=logging.INFO,
-        handlers=[file_handler, output_handler, console_handler]
+        format='%(asctime)s | %(message)s',
+        datefmt='%H:%M:%S',
+        handlers=handlers
     )
     
     # 设置所有第三方库的日志级别为 ERROR
     for logger_name in logging.root.manager.loggerDict:
-        logging.getLogger(logger_name).setLevel(logging.ERROR)
+        if logger_name.startswith(('tensorflow', 'numpy', 'matplotlib', 'keras')):
+            logging.getLogger(logger_name).setLevel(logging.ERROR)
     
-    # 禁用 TensorFlow 的警告和信息输出
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-    tf.get_logger().setLevel('ERROR')
+    # 过滤掉优化器警告
+    import warnings
+    warnings.filterwarnings('ignore', category=UserWarning, module='keras')
 
-def train_and_evaluate_models(X_train, X_val, X_test, y_train, y_val, y_test, feature_names, experiment_name):
+def create_directories():
+    """创建必要的目录结构"""
+    directories = [
+        PROCESSED_DATA_DIR,
+        os.path.join(RESULTS_DIR, 'metrics'),
+        os.path.join(RESULTS_DIR, 'figures')
+    ]
+    
+    for directory in directories:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+def train_and_evaluate_models(
+    X_train, X_val, X_test,
+    y_train, y_val, y_test,
+    feature_names,
+    experiment_name,
+    results_dir
+):
     """训练和评估模型"""
     logging.info(f"\n{'='*50}")
-    logging.info(f"开始{experiment_name}实验")
+    logging.info(f"开始 {experiment_name} 实验")
     logging.info(f"{'='*50}")
     logging.info(f"数据集大小:")
     logging.info(f"训练集: {X_train.shape}")
@@ -73,11 +88,11 @@ def train_and_evaluate_models(X_train, X_val, X_test, y_train, y_val, y_test, fe
     models = BaselineModels()
     results = {}
     
-    # 使用自定义进度条
+    # 模型配置
     model_configs = [
-        ('LSTM', (models.train_lstm, models.predict_lstm)),
-        ('GRU', (models.train_gru, models.predict_gru)),
-        ('CNN_LSTM', (models.train_cnn_lstm, models.predict_cnn_lstm))
+        ('LSTM', (models.train_lstm, lambda x: models.predict('lstm', x))),
+        ('GRU', (models.train_gru, lambda x: models.predict('gru', x))),
+        ('CNN_LSTM', (models.train_cnn_lstm, lambda x: models.predict('cnn_lstm', x)))
     ]
     
     for model_name, (train_func, predict_func) in model_configs:
@@ -88,17 +103,25 @@ def train_and_evaluate_models(X_train, X_val, X_test, y_train, y_val, y_test, fe
         X_val_reshaped = X_val.values.reshape((X_val.shape[0], X_val.shape[1], 1))
         X_test_reshaped = X_test.values.reshape((X_test.shape[0], X_test.shape[1], 1))
         
-        # 添加训练验证
+        # 训练模型
         history = train_func(X_train_reshaped, y_train, X_val_reshaped, y_val)
+        model = models.get_model(model_name)
         
-        # 验证训练是否成功
-        if history is None or not hasattr(history, 'history'):
-            logging.error(f"{model_name} 模型训练失败")
-            continue
-            
-        y_pred = predict_func(X_test_reshaped)
+        # 绘制学习曲线
+        plot_training_history(history, model_name, results_dir)
+        
+        # 进行预测
+        y_pred = model.predict(X_test_reshaped).flatten()
+        # 评估模型
         results[model_name] = evaluate_model(y_test, y_pred, model_name)
         
+        # 绘制预测结果图
+        plot_predictions(y_test, y_pred, model_name, results_dir)
+        
+        # 执行 SHAP 分析
+        X_sample = X_test_reshaped[:100]  # 示例：取前 100 个样本
+        shap_analysis(model, X_sample, model_name, results_dir)
+    
     return results
 
 def run_experiments():
@@ -152,7 +175,14 @@ def calculate_improvement(baseline_results, enhanced_results):
     return improvements
 
 def main():
+    create_directories()
     setup_logging()
+    
+    # 固定随机种子
+    os.environ['PYTHONHASHSEED'] = str(RANDOM_SEED)
+    random.seed(RANDOM_SEED)
+    np.random.seed(RANDOM_SEED)
+    tf.random.set_seed(RANDOM_SEED)
     
     try:
         # 运行实验
@@ -168,35 +198,35 @@ def main():
 
 def run_single_experiment(processor, data, experiment_name):
     """运行单个实验"""
-    # 获取天气特征列表
-    weather_features = [col for col in data.columns if col.startswith(('temp_', 'humidity_', 'precip_', 'wind_'))]
-    
-    # 在训练模型之前进行天气特征分析
-    if experiment_name == 'enhanced':
-        analyze_weather_features(data, weather_features)
+    # 获取特征列表
+    feature_names = data.columns.tolist()
     
     # 划分数据集
     X_train, X_val, X_test, y_train, y_val, y_test = processor.split_data(data)
-    feature_names = X_train.columns.tolist()
+    
+    # 定义结果保存目录
+    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    results_dir = os.path.join(RESULTS_DIR, f'{experiment_name}_results_{timestamp}')
+    os.makedirs(results_dir, exist_ok=True)
     
     # 训练和评估模型
     results = train_and_evaluate_models(
         X_train, X_val, X_test,
         y_train, y_val, y_test,
         feature_names,
-        experiment_name
+        experiment_name,
+        results_dir
     )
-    
-    # 保存实验结果
-    save_path = os.path.join(RESULTS_DIR, 'metrics', f'{experiment_name}_results.csv')
-    pd.DataFrame(results).to_csv(save_path)
     
     return results
 
 def save_experiment_results(baseline_results, enhanced_results, improvements):
     """保存实验结果和对比分析"""
-    # 创建结果目录
-    results_dir = os.path.join(RESULTS_DIR, 'comparison')
+    # 获取当前时间戳
+    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    
+    # 创建结果目录，包含时间戳
+    results_dir = os.path.join(RESULTS_DIR, f'comparison_{timestamp}')
     os.makedirs(results_dir, exist_ok=True)
     
     # 准备对比结果数据
@@ -212,15 +242,15 @@ def save_experiment_results(baseline_results, enhanced_results, improvements):
                 'Improvement(%)': improvements[model][f'{metric}_improvement']
             })
     
-    # 使用concat创建DataFrame
+    # 创建 DataFrame
     comparison_df = pd.DataFrame(comparison_data)
     
-    # 保存结果
-    comparison_df.to_csv(os.path.join(results_dir, 'model_comparison.csv'), index=False)
+    # 保存结果，文件名包含时间戳
+    comparison_df.to_csv(os.path.join(results_dir, f'model_comparison_{timestamp}.csv'), index=False)
     logging.info("实验结果已保存")
     
-    # 绘制对比图
-    plot_model_comparison(baseline_results, enhanced_results)
+    # 绘制对比图，传递 results_dir
+    plot_model_comparison(baseline_results, enhanced_results, results_dir)
 
 def find_best_model(improvements):
     """找出性能提升最好的模型"""
@@ -257,28 +287,32 @@ def print_experiment_summary(baseline_results, enhanced_results, improvements):
     logging.info(f"平均性能提升: {avg_improvement:.2f}%")
 
 def configure_hardware():
-    """配置 M1 MacBook 的硬件优化"""
+    """配置硬件优化"""
     try:
-        # 检测是否支持 Metal
+        # 设置环境变量
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # 抑制所有 TF 日志
+        os.environ['TF_KERAS_BACKEND_LEGACY_OPTIMIZER'] = '1'
+        os.environ['TF_KERAS_BACKEND_LEGACY_WARNING'] = '0'
+        tf.get_logger().setLevel('ERROR')
+        
+        # 检测可用设备（不输出日志）
         devices = tf.config.list_physical_devices()
-        print("可用设备:", devices)
         
-        # 对于 M1，使用 Metal 插件
-        if len(devices) > 0:
-            # 启用内存增长
-            for device in devices:
-                tf.config.experimental.set_memory_growth(device, True)
-        
-        # M1 优化的混合精度设置
-        # 注意：M1 上使用 'mixed_float16' 可能会有兼容性问题
-        # 建议使用默认精度设置
-        
-        # 设置线程优化
+        # GPU 配置
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            for gpu in gpus:
+                try:
+                    tf.config.experimental.set_memory_growth(gpu, True)
+                except RuntimeError:
+                    pass
+                    
+        # 线程优化
         tf.config.threading.set_inter_op_parallelism_threads(2)
         tf.config.threading.set_intra_op_parallelism_threads(4)
         
     except Exception as e:
-        print(f"硬件配置出错: {e}")
+        logging.error(f"Hardware configuration error: {str(e)}")
 
 if __name__ == "__main__":
     main() 

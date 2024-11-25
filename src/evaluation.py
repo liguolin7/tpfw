@@ -4,41 +4,54 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 import os
-from config import RESULTS_DIR
+from config import RESULTS_DIR, RANDOM_SEED
 import logging
 import shap
 from scipy import stats
 from sklearn.inspection import permutation_importance
 
 def evaluate_model(y_true, y_pred, model_name):
-    """评估模型性能并返回结果"""
+    """Evaluate model performance and return results"""
+    # Handle NaN values
+    mask = ~np.isnan(y_true) & ~np.isnan(y_pred)
+    y_true = y_true[mask]
+    y_pred = y_pred[mask]
+    
+    # Avoid division by zero
+    epsilon = 1e-10
+    y_true_safe = np.where(np.abs(y_true) < epsilon, epsilon, y_true)
+    
+    # Calculate metrics
     results = {
         'rmse': np.sqrt(mean_squared_error(y_true, y_pred)),
         'mae': mean_absolute_error(y_true, y_pred),
         'r2': r2_score(y_true, y_pred),
-        'mape': mean_absolute_percentage_error(y_true, y_pred)
+        'mape': np.mean(np.abs((y_true_safe - y_pred) / y_true_safe)) * 100
     }
     
-    # 只输出一次评估结果
-    logging.info(f"\n{model_name} 模型评估结果:")
+    # Log results
+    logging.info(f"\n{model_name} Model Evaluation Results:")
     for metric, value in results.items():
         logging.info(f"{metric}: {value:.4f}")
     
     return results
 
-def plot_predictions(y_true, y_pred, model_name):
-    """绘制预测结果对比图"""
-    plt.figure(figsize=(15, 8))
-    plt.plot(y_true.index[-100:], y_true[-100:], label='Actual', linewidth=2)
-    plt.plot(y_true.index[-100:], y_pred[-100:], label='Predicted', linewidth=2, linestyle='--')
-    
-    plt.title(f'{model_name} Prediction Results (Last 100 Points)', fontsize=14)
-    plt.xlabel('Time', fontsize=12)
-    plt.ylabel('Speed', fontsize=12)
+def plot_predictions(y_true, y_pred, model_name, results_dir):
+    """Plot prediction comparison"""
+    plt.figure(figsize=(15, 6))
+    plt.plot(y_true.reset_index(drop=True), label='Actual', linewidth=2)
+    plt.plot(y_pred, label='Predicted', linewidth=2, linestyle='--')
+    plt.title(f'{model_name} Prediction Results', fontsize=14)
+    plt.xlabel('Sample Index', fontsize=12)
+    plt.ylabel('Value', fontsize=12)
     plt.legend(fontsize=12)
     plt.grid(True)
+    plt.tight_layout()
     
-    save_path = os.path.join(RESULTS_DIR, 'figures', f'{model_name}_predictions.png')
+    # Save plot
+    figures_dir = os.path.join(results_dir, 'figures')
+    os.makedirs(figures_dir, exist_ok=True)
+    save_path = os.path.join(figures_dir, f'{model_name}_predictions.png')
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
 
@@ -83,34 +96,24 @@ def plot_residuals(y_true, y_pred, model_name):
     for stat, value in residuals_stats.items():
         logging.info(f"{stat}: {value:.4f}")
 
-def plot_feature_importance(model, feature_names, model_name):
-    """绘制特征重要性图（仅适用于随机森林模型）
+def plot_feature_importance(model, X_test, y_test, feature_names, model_name, results_dir):
+    """使用 Permutation Importance 进行特征重要性分析"""
+    result = permutation_importance(model, X_test, y_test, n_repeats=10, random_state=RANDOM_SEED, n_jobs=-1)
+    importance = result.importances_mean
     
-    参数:
-        model: 训练好的模型
-        feature_names: 特征名称列表
-        model_name: 模型名称
-    """
-    if not hasattr(model, 'feature_importances_'):
-        logging.warning(f"{model_name} does not support feature importance analysis")
-        return
-        
-    importances = pd.DataFrame({
-        'feature': feature_names,
-        'importance': model.feature_importances_
-    })
-    importances = importances.sort_values('importance', ascending=False)
-    
+    # 绘制特征重要性
+    indices = np.argsort(importance)[::-1]
     plt.figure(figsize=(12, 6))
-    sns.barplot(data=importances.head(10), x='importance', y='feature')
-    plt.title(f'{model_name} Top 10 Feature Importance')
-    plt.xlabel('Importance')
-    plt.ylabel('Feature')
-    
-    save_path = os.path.join(RESULTS_DIR, 'figures', f'{model_name}_feature_importance.png')
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.title(f'{model_name} 特征重要性（Permutation Importance）', fontsize=16)
+    plt.bar(range(len(feature_names)), importance[indices], align='center')
+    plt.xticks(range(len(feature_names)), [feature_names[i] for i in indices], rotation=90)
+    plt.xlabel('特征')
+    plt.ylabel('重要性')
+    plt.tight_layout()
+    save_path = os.path.join(results_dir, f'{model_name}_feature_importance.png')
+    plt.savefig(save_path, dpi=300)
     plt.close()
-    
+
 def find_best_model(improvements):
     """根据性能提升找出最佳模型
     
@@ -138,14 +141,14 @@ def find_best_model(improvements):
     
     return best_model[0]
     
-def plot_model_comparison(baseline_results, enhanced_results, metrics=['rmse', 'mae', 'r2', 'mape']):
+def plot_model_comparison(baseline_results, enhanced_results, results_dir, metrics=['rmse', 'mae', 'r2', 'mape']):
     """绘制基础模型和增强模型的性能对比图"""
-    fig, axes = plt.subplots(2, 2, figsize=(20, 16))
-    axes = axes.ravel()
+    # 确保目录存在
+    figures_dir = os.path.join(results_dir, 'figures')
+    os.makedirs(figures_dir, exist_ok=True)
     
-    for i, metric in enumerate(metrics):
-        ax = axes[i]
-        
+    for metric in metrics:
+        plt.figure(figsize=(10, 6))
         models = list(baseline_results.keys())
         baseline_values = [baseline_results[model][metric] for model in models]
         enhanced_values = [enhanced_results[model][metric] for model in models]
@@ -153,39 +156,18 @@ def plot_model_comparison(baseline_results, enhanced_results, metrics=['rmse', '
         x = np.arange(len(models))
         width = 0.35
         
-        # 添加百分比改进标签
-        improvements = [(e - b) / b * 100 if metric != 'r2' else (abs(e) - abs(b)) / abs(b) * 100
-                       for b, e in zip(baseline_values, enhanced_values)]
+        plt.bar(x - width/2, baseline_values, width, label='Baseline')
+        plt.bar(x + width/2, enhanced_values, width, label='Enhanced')
         
-        bars1 = ax.bar(x - width/2, baseline_values, width, label='Baseline', color='skyblue')
-        bars2 = ax.bar(x + width/2, enhanced_values, width, label='Enhanced', color='lightgreen')
+        plt.xlabel('Models')
+        plt.ylabel(metric.upper())
+        plt.title(f'{metric.upper()} Comparison')
+        plt.xticks(x, models)
+        plt.legend()
         
-        # 添加数值标签
-        for bars in [bars1, bars2]:
-            for bar in bars:
-                height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width()/2., height,
-                       f'{height:.2f}',
-                       ha='center', va='bottom')
-        
-        # 添加改进百分比
-        for idx, imp in enumerate(improvements):
-            ax.text(x[idx], max(baseline_values[idx], enhanced_values[idx]),
-                   f'{imp:+.2f}%',
-                   ha='center', va='bottom', color='red')
-        
-        ax.set_title(f'{metric.upper()} Comparison', fontsize=14)
-        ax.set_xlabel('Models', fontsize=12)
-        ax.set_ylabel(metric.upper(), fontsize=12)
-        ax.set_xticks(x)
-        ax.set_xticklabels(models)
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    save_path = os.path.join(RESULTS_DIR, 'figures', 'model_comparison.png')
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    plt.close()
+        save_path = os.path.join(figures_dir, f'comparison_{metric}.png')
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close()
 
 def plot_prediction_distribution(y_true, y_pred, model_name):
     """绘制预测值分布图"""
@@ -307,123 +289,80 @@ def detailed_model_analysis(y_true, y_pred, model_name):
     
     return stats_results
 
-def shap_analysis(model, X_test, feature_names, model_name):
-    """改进的SHAP值分析"""
-    # 根据模型类型选择合适的解释器
-    if model_name == 'LinearRegression':
-        explainer = shap.LinearExplainer(
-            model, 
-            shap.sample(X_test, 100),
-            feature_names=feature_names
-        )
-    elif model_name == 'RandomForest':
-        explainer = shap.TreeExplainer(
-            model,
-            feature_perturbation='interventional',
-            feature_names=feature_names
-        )
-    else:
-        return None
-    
-    # 计算SHAP值
-    shap_values = explainer.shap_values(X_test)
-    
-    # 创建多个SHAP可视化
-    plt.figure(figsize=(15, 10))
-    
-    # 1. 特征重要性总结图
-    plt.subplot(211)
-    shap.summary_plot(
-        shap_values, 
-        X_test,
-        feature_names=feature_names,
-        plot_type="bar",
-        show=False
-    )
-    plt.title(f'{model_name} SHAP Feature Importance')
-    
-    # 2. 特征影响图
-    plt.subplot(212)
-    shap.summary_plot(
-        shap_values,
-        X_test,
-        feature_names=feature_names,
-        show=False
-    )
-    plt.title(f'{model_name} SHAP Feature Impact')
-    
-    plt.tight_layout()
-    save_path = os.path.join(RESULTS_DIR, 'figures', f'{model_name}_shap_analysis.png')
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    return shap_values    
+def shap_analysis(model, X_sample, model_name, results_dir):
+    """Analyze feature importance using perturbation method"""
+    try:
+        base_predictions = model.predict(X_sample)
+        n_features = X_sample.shape[2]
+        importances = np.zeros(n_features)
+        
+        for i in range(n_features):
+            X_perturbed = X_sample.copy()
+            X_perturbed[:, :, i] = np.random.permutation(X_perturbed[:, :, i])
+            perturbed_predictions = model.predict(X_perturbed)
+            importances[i] = np.mean((base_predictions - perturbed_predictions) ** 2)
+        
+        plt.figure(figsize=(10, 6))
+        feature_indices = np.argsort(importances)[::-1]
+        plt.bar(range(len(importances)), importances[feature_indices])
+        plt.title(f'{model_name} Feature Importance Analysis')
+        plt.xlabel('Feature Index')
+        plt.ylabel('Importance Score')
+        plt.xticks(range(len(importances)), feature_indices)
+        plt.tight_layout()
+        
+        figures_dir = os.path.join(results_dir, 'figures')
+        os.makedirs(figures_dir, exist_ok=True)
+        save_path = os.path.join(figures_dir, f'{model_name}_feature_importance.png')
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+    except Exception as e:
+        logging.error(f"Feature importance analysis error: {str(e)}")
+        raise
 
-def plot_training_history(history, model_name):
-    """绘制模型训练历史
+def plot_training_history(history, model_name, results_dir):
+    """绘制训练和验证集的损失和 MAE 曲线"""
+    epochs = range(1, len(history.history['loss']) + 1)
     
-    Args:
-        history: 模型训练历史对象
-        model_name: 模型名称
-    """
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    plt.figure(figsize=(12, 5))
     
-    # 损失曲线
-    ax1.plot(history.history['loss'], label='Training Loss')
-    ax1.plot(history.history['val_loss'], label='Validation Loss')
-    ax1.set_title(f'{model_name} Training Loss')
-    ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('Loss')
-    ax1.legend()
-    ax1.grid(True)
+    # 绘制损失曲线
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs, history.history['loss'], 'bo-', label='Training Loss')
+    plt.plot(epochs, history.history['val_loss'], 'ro-', label='Validation Loss')
+    plt.title(f'{model_name} Loss Curve')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.grid(True)
     
-    # MAE曲线
-    ax2.plot(history.history['mae'], label='Training MAE')
-    ax2.plot(history.history['val_mae'], label='Validation MAE')
-    ax2.set_title(f'{model_name} Training MAE')
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('MAE')
-    ax2.legend()
-    ax2.grid(True)
+    # 绘制 MAE 曲线
+    plt.subplot(1, 2, 2)
+    plt.plot(epochs, history.history['mae'], 'bo-', label='Training MAE')
+    plt.plot(epochs, history.history['val_mae'], 'ro-', label='Validation MAE')
+    plt.title(f'{model_name} MAE Curve')
+    plt.xlabel('Epoch')
+    plt.ylabel('MAE')
+    plt.legend()
+    plt.grid(True)
     
     plt.tight_layout()
-    save_path = os.path.join(RESULTS_DIR, 'figures', f'{model_name}_training_history.png')
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    save_path = os.path.join(results_dir, f'{model_name}_learning_curve.png')
+    plt.savefig(save_path, dpi=300)
     plt.close()
-    
+
 def analyze_weather_features(df, weather_features, target='avg_speed'):
-    """分析天气特征与目标变量的关系
+    """分析天气特征与目标变量的关系"""
+    # 确保目录存在
+    figures_dir = os.path.join(RESULTS_DIR, 'figures')
+    os.makedirs(figures_dir, exist_ok=True)
     
-    Args:
-        df: 包含天气特征的数据框
-        weather_features: 天气特征列表
-        target: 目标变量名称
-    """
     # 相关性分析
     plt.figure(figsize=(12, 8))
     corr = df[weather_features + [target]].corr()
     sns.heatmap(corr, annot=True, cmap='coolwarm', center=0)
     plt.title('Weather Features Correlation with Traffic Speed')
-    save_path = os.path.join(RESULTS_DIR, 'figures', 'weather_correlation.png')
+    save_path = os.path.join(figures_dir, 'weather_correlation.png')
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
-    
-    # 天气特征箱线图
-    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-    axes = axes.ravel()
-    
-    for idx, feature in enumerate(weather_features[:4]):
-        sns.boxplot(data=df, y=feature, ax=axes[idx])
-        axes[idx].set_title(f'Distribution of {feature}')
-    
-    plt.tight_layout()
-    save_path = os.path.join(RESULTS_DIR, 'figures', 'weather_distributions.png')
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    # 散点图矩阵
-    sns.pairplot(df[weather_features + [target]], diag_kind='kde')
-    save_path = os.path.join(RESULTS_DIR, 'figures', 'weather_pairplot.png')
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    plt.close()
-    

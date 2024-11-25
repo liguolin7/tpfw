@@ -1,5 +1,7 @@
 # 配置文件路径和模型参数
 import os
+import tensorflow as tf
+import tensorflow.keras.optimizers.legacy as legacy_optimizers
 
 # 数据路径
 RAW_DATA_DIR = 'data/raw'
@@ -11,55 +13,61 @@ TRAFFIC_FILE = 'traffic/metr-la.csv'
 WEATHER_FILE = 'weather/noaa_weather_5min.csv'
 
 # 数据处理参数
-TRAIN_RATIO = 0.7
-VAL_RATIO = 0.15
-TEST_RATIO = 0.15
+TRAIN_RATIO = 0.5
+VAL_RATIO = 0.25
+TEST_RATIO = 0.25
 
-# 模型参数
-RANDOM_STATE = 42
+# 全局随机种子
+RANDOM_SEED = 42
 
-# 性能优化参数
+# 训练配置
 TRAINING_CONFIG = {
-    'batch_size': 512,
-    'max_epochs': 100,
-    'early_stopping': {
-        'monitor': 'val_loss',
-        'patience': 15,
-        'restore_best_weights': True
-    },
-    'lr_scheduler': {
-        'monitor': 'val_loss',
-        'factor': 0.2,
-        'patience': 8,
-        'min_lr': 1e-6
-    },
-    'validation_split': 0.2,
-    'multiprocessing': True,
-    'num_workers': 4
+    'batch_size': 64,
+    'epochs': 10,
+    'verbose': 1,
+    'callbacks': [
+        tf.keras.callbacks.EarlyStopping(
+            monitor='val_loss',
+            patience=2,
+            restore_best_weights=True
+        ),
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor='val_loss',
+            factor=0.5,
+            patience=1,
+            min_lr=1e-4
+        )
+    ]
 }
 
 # 模型配置
 MODEL_CONFIG = {
     'LSTM': {
-        'units': [128, 64, 32],
-        'dropout': 0.2,
-        'learning_rate': 0.001,
+        'units': [16],
+        'dropout': 0.1,
+        'l2_regularization': 1e-3,
+        'optimizer': legacy_optimizers.Adam,
+        'learning_rate': 0.01,
         'loss': 'mse',
         'metrics': ['mae']
     },
     'GRU': {
-        'units': [128, 64, 32],
-        'dropout': 0.2,
-        'learning_rate': 0.001,
+        'units': [16],
+        'dropout': 0.1,
+        'l2_regularization': 1e-3,
+        'optimizer': legacy_optimizers.Adam,
+        'learning_rate': 0.01,
         'loss': 'mse',
         'metrics': ['mae']
     },
     'CNN_LSTM': {
-        'cnn_filters': [64, 32],
-        'cnn_kernel_size': 3,
-        'lstm_units': [64, 32],
-        'dropout': 0.2,
-        'learning_rate': 0.001,
+        'cnn_filters': [8],
+        'cnn_kernel_size': 2,
+        'lstm_units': [8],
+        'dropout': 0.1,
+        'l2_regularization': 1e-3,
+        'optimizer': legacy_optimizers.Adam,
+        'learning_rate': 0.01,
         'loss': 'mse',
         'metrics': ['mae']
     }

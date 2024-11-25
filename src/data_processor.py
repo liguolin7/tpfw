@@ -3,10 +3,11 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from config import (
     TRAIN_RATIO, VAL_RATIO, TEST_RATIO, 
-    RANDOM_STATE, TRAINING_CONFIG
+    RANDOM_SEED, PROCESSED_DATA_DIR
 )
 import logging
 from tqdm import tqdm
+from sklearn.model_selection import train_test_split
 
 class DataProcessor:
     def __init__(self):
@@ -30,8 +31,15 @@ class DataProcessor:
         # 移除空值
         df = df.dropna()
         
-        # 移除异常值 (比如速度为0或异常高的值)
-        df = df[(df['avg_speed'] > 0) & (df['avg_speed'] < 100)]
+        # 使用 IQR 方法检测和处理异常值
+        Q1 = df['avg_speed'].quantile(0.25)
+        Q3 = df['avg_speed'].quantile(0.75)
+        IQR = Q3 - Q1
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+        
+        # 过滤在范围之外的异常值
+        df = df[(df['avg_speed'] >= lower_bound) & (df['avg_speed'] <= upper_bound)]
         
         return df
         
@@ -39,13 +47,42 @@ class DataProcessor:
         """处理天气数据"""
         logging.info("开始处理天气数据...")
         
-        # 检查缺失值
-        missing_columns = df.isnull().sum()[df.isnull().sum() > 0].shape[0]
-        if missing_columns > 0:
-            logging.info(f"处理{missing_columns}个含缺失值的天气特征...")
+        # 分析缺失值模式
+        missing_summary = df.isnull().sum()
+        total_missing = missing_summary.sum()
+        logging.info(f"天气数据总缺失值数: {total_missing}")
+        logging.info(f"每列缺失值概览:\n{missing_summary}")
         
-        # 处理缺失值
-        df = df.fillna(method='ffill').fillna(method='bfill')
+        # 可视化缺失值模式（可选）
+        # import seaborn as sns
+        # import matplotlib.pyplot as plt
+        # sns.heatmap(df.isnull(), cbar=False)
+        # plt.show()
+
+        # 视情况选择适当的填充方法
+        # 例如，对于某些特征使用前向填充，对于其他特征使用均值填充
+        df_filled = df.copy()
+        for column in df.columns:
+            if df[column].isnull().sum() > 0:
+                if df[column].dtype == 'float':
+                    # 连续型变量使用插值法
+                    df_filled[column] = df[column].interpolate(method='time')
+                else:
+                    # 类别型变量使用前向填充
+                    df_filled[column] = df[column].fillna(method='ffill')
+        
+        # 如果仍有缺失值，使用后向填充
+        df_filled = df_filled.fillna(method='bfill')
+        
+        # 检查是否还有缺失值
+        remaining_missing = df_filled.isnull().sum().sum()
+        if remaining_missing > 0:
+            logging.warning(f"填充后仍有缺失值数: {remaining_missing}")
+        else:
+            logging.info("天气数据缺失值处理完成")
+        
+        # 后续处理...
+        df = df_filled
         
         # 选择重要的天气特征
         selected_features = [
@@ -64,11 +101,11 @@ class DataProcessor:
         
         # 处理异常值
         for col in df.columns:
-            q1 = df[col].quantile(0.25)
-            q3 = df[col].quantile(0.75)
-            iqr = q3 - q1
-            lower_bound = q1 - 1.5 * iqr
-            upper_bound = q3 + 1.5 * iqr
+            Q1 = df[col].quantile(0.25)
+            Q3 = df[col].quantile(0.75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
             df[col] = df[col].clip(lower_bound, upper_bound)
         
         logging.info("天气数据处理完成")
@@ -104,15 +141,7 @@ class DataProcessor:
         return merged_df
         
     def create_features(self, df, include_weather=True):
-        """创建特征
-        
-        Args:
-            df (pd.DataFrame): 预处理后的数据
-            include_weather (bool): 是否包含天气特征
-        
-        Returns:
-            pd.DataFrame: 包含新特征的数据框
-        """
+        """创建特征"""
         # 确保数据按时间排序
         df = df.sort_index()
         
@@ -121,65 +150,83 @@ class DataProcessor:
         df['day_of_week'] = df.index.dayofweek
         df['month'] = df.index.month
         
+        # 添加节假日标记
+        # 假设使用美国的公共假期
+        import holidays
+        us_holidays = holidays.US()
+        df['is_holiday'] = df.index.to_series().apply(lambda x: 1 if x in us_holidays else 0)
+        
         # 创建滞后特征
         df['speed_lag1'] = df['avg_speed'].shift(1)
         df['speed_lag2'] = df['avg_speed'].shift(2)
         df['speed_lag3'] = df['avg_speed'].shift(3)
         
-        # 创建移动平均特征
+        # 创建更长的移动平均特征
         df['speed_ma5'] = df['avg_speed'].rolling(window=5).mean()
         df['speed_ma10'] = df['avg_speed'].rolling(window=10).mean()
+        df['speed_ma15'] = df['avg_speed'].rolling(window=15).mean()
+        df['speed_ma30'] = df['avg_speed'].rolling(window=30).mean()
+        
+        # 天气类型编码
+        if include_weather:
+            # 假设天气数据中有天气描述字段，例如'weather_description'
+            # 需要将天气描述进行类别编码
+            if 'weather_description' in df.columns:
+                from sklearn.preprocessing import LabelEncoder
+                le = LabelEncoder()
+                df['weather_encoded'] = le.fit_transform(df['weather_description'])
         
         # 移除包含NaN的行
         df = df.dropna()
         
         return df
         
-    def split_data(self, df, target_col='avg_speed'):
-        """划分数据集"""
-        logging.info("开始划分数据集...")
+    def split_data(self, data):
+        """分割数据集"""
+        # 提取目标变量
+        y = data['target']
+        # 删除目标变量列
+        X = data.drop('target', axis=1)
         
-        # 移除数据量限制，使用全部数据
-        # 使用时间序列分割
-        train_size = int(len(df) * TRAIN_RATIO)
-        val_size = int(len(df) * VAL_RATIO)
+        # 计算分割点
+        train_size = int(len(data) * 0.5)
+        val_size = int(len(data) * 0.25)
         
-        # 分离特征和目标变量
-        y = df[target_col].values
-        X = df.drop(columns=[target_col])
-        
-        # 快速分割
+        # 分割数据集
         X_train = X[:train_size]
         y_train = y[:train_size]
-        X_val = X[train_size:train_size + val_size]
-        y_val = y[train_size:train_size + val_size]
-        X_test = X[train_size + val_size:]
-        y_test = y[train_size + val_size:]
         
-        # 使用更快的标准化方法
-        self.scaler.fit(X_train)
-        X_train = pd.DataFrame(self.scaler.transform(X_train), columns=X.columns, index=X_train.index)
-        X_val = pd.DataFrame(self.scaler.transform(X_val), columns=X.columns, index=X_val.index)
-        X_test = pd.DataFrame(self.scaler.transform(X_test), columns=X.columns, index=X_test.index)
+        X_val = X[train_size:train_size+val_size]
+        y_val = y[train_size:train_size+val_size]
+        
+        X_test = X[train_size+val_size:]
+        y_test = y[train_size+val_size:]
         
         return X_train, X_val, X_test, y_train, y_val, y_test
         
     def prepare_data(self, traffic_data, weather_data=None):
-        """准备实验数据
+        """准备实验数据"""
+        # 基础数据处理
+        processed_data = traffic_data.copy()
         
-        Args:
-            traffic_data (pd.DataFrame): 交通数据
-            weather_data (pd.DataFrame, optional): 天气数据
-            
-        Returns:
-            pd.DataFrame: 处理后的数据集
-        """
-        logging.info("准备实验数据...")
-        processed_traffic = self.process_traffic_data(traffic_data)
+        # 设置目标变量（假设最后一列是目标变量）
+        processed_data['target'] = processed_data.iloc[:, -1]
         
         if weather_data is not None:
-            processed_weather = self.process_weather_data(weather_data)
-            merged_df = self.align_and_merge_data(processed_traffic, processed_weather)
-            return self.create_features(merged_df, include_weather=True)
+            # 合并天气数据
+            processed_data = pd.concat([processed_data, weather_data], axis=1)
         
-        return self.create_features(processed_traffic, include_weather=False)
+        # 数据清洗
+        processed_data = processed_data.replace([np.inf, -np.inf], np.nan)
+        processed_data = processed_data.fillna(method='ffill')
+        processed_data = processed_data.fillna(method='bfill')
+        
+        # 标准化
+        scaler = StandardScaler()
+        scaled_data = pd.DataFrame(
+            scaler.fit_transform(processed_data),
+            columns=processed_data.columns,
+            index=processed_data.index
+        )
+        
+        return scaled_data
