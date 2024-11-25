@@ -13,29 +13,29 @@ TRAFFIC_FILE = 'traffic/metr-la.csv'
 WEATHER_FILE = 'weather/noaa_weather_5min.csv'
 
 # 数据处理参数
-TRAIN_RATIO = 0.5
-VAL_RATIO = 0.25
-TEST_RATIO = 0.25
+TRAIN_RATIO = 0.7    # 训练集比例
+VAL_RATIO = 0.15     # 验证集比例
+TEST_RATIO = 0.15    # 测试集比例
 
 # 全局随机种子
 RANDOM_SEED = 42
 
 # 训练配置
 TRAINING_CONFIG = {
-    'batch_size': 64,
-    'epochs': 10,
+    'batch_size': 256,
+    'epochs': 100,
     'verbose': 1,
     'callbacks': [
         tf.keras.callbacks.EarlyStopping(
             monitor='val_loss',
-            patience=2,
+            patience=15,
             restore_best_weights=True
         ),
         tf.keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
-            factor=0.5,
-            patience=1,
-            min_lr=1e-4
+            factor=0.2,
+            patience=8,
+            min_lr=1e-6
         )
     ]
 }
@@ -43,31 +43,31 @@ TRAINING_CONFIG = {
 # 模型配置
 MODEL_CONFIG = {
     'LSTM': {
-        'units': [16],
-        'dropout': 0.1,
-        'l2_regularization': 1e-3,
+        'units': [128, 64],
+        'dropout': 0.3,
+        'l2_regularization': 1e-5,
         'optimizer': legacy_optimizers.Adam,
-        'learning_rate': 0.01,
+        'learning_rate': 0.001,
         'loss': 'mse',
         'metrics': ['mae']
     },
     'GRU': {
-        'units': [16],
-        'dropout': 0.1,
-        'l2_regularization': 1e-3,
+        'units': [128, 64],
+        'dropout': 0.3,
+        'l2_regularization': 1e-5,
         'optimizer': legacy_optimizers.Adam,
-        'learning_rate': 0.01,
+        'learning_rate': 0.001,
         'loss': 'mse',
         'metrics': ['mae']
     },
     'CNN_LSTM': {
-        'cnn_filters': [8],
-        'cnn_kernel_size': 2,
-        'lstm_units': [8],
-        'dropout': 0.1,
-        'l2_regularization': 1e-3,
+        'cnn_filters': [64, 32],
+        'cnn_kernel_size': 3,
+        'lstm_units': [64, 32],
+        'dropout': 0.3,
+        'l2_regularization': 1e-5,
         'optimizer': legacy_optimizers.Adam,
-        'learning_rate': 0.01,
+        'learning_rate': 0.001,
         'loss': 'mse',
         'metrics': ['mae']
     }

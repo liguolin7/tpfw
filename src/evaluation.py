@@ -48,11 +48,12 @@ def plot_predictions(y_true, y_pred, model_name, results_dir):
     plt.grid(True)
     plt.tight_layout()
     
-    # Save plot
-    figures_dir = os.path.join(results_dir, 'figures')
-    os.makedirs(figures_dir, exist_ok=True)
-    save_path = os.path.join(figures_dir, f'{model_name}_predictions.png')
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    if results_dir:
+        figures_dir = os.path.join(results_dir, 'figures')
+        if y_pred is not None and y_true is not None:
+            os.makedirs(figures_dir, exist_ok=True)
+            save_path = os.path.join(figures_dir, f'{model_name}_predictions.png')
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
 
 def plot_residuals(y_true, y_pred, model_name):
@@ -122,7 +123,7 @@ def find_best_model(improvements):
     """
     model_scores = {}
     
-    # 计算每个模型的综合得分
+    # 计算���个模型的综合得分
     for model, metrics in improvements.items():
         # 根据RMSE和MAE的降低程度以及R2的提升程度计算得分
         rmse_score = metrics['rmse_improvement']
@@ -239,7 +240,7 @@ def analyze_weather_impact(model, X_test, y_test, feature_names):
     
     参数:
         model: 训练好的模型
-        X_test: 测试集特征
+        X_test: 测���集特征
         y_test: 测试集标签
         feature_names: 特征名列表
     """

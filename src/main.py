@@ -60,9 +60,7 @@ def setup_logging():
 def create_directories():
     """创建必要的目录结构"""
     directories = [
-        PROCESSED_DATA_DIR,
-        os.path.join(RESULTS_DIR, 'metrics'),
-        os.path.join(RESULTS_DIR, 'figures')
+        PROCESSED_DATA_DIR
     ]
     
     for directory in directories:
