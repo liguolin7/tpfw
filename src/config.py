@@ -23,7 +23,7 @@ RANDOM_SEED = 42
 # 训练配置
 TRAINING_CONFIG = {
     'batch_size': 256,
-    'epochs': 100,
+    'epochs': 1,
     'verbose': 1,
     'callbacks': [
         tf.keras.callbacks.EarlyStopping(

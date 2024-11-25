@@ -123,7 +123,7 @@ def find_best_model(improvements):
     """
     model_scores = {}
     
-    # 计算���个模型的综合得分
+    # 计算个模型的综合得分
     for model, metrics in improvements.items():
         # 根据RMSE和MAE的降低程度以及R2的提升程度计算得分
         rmse_score = metrics['rmse_improvement']
@@ -240,7 +240,7 @@ def analyze_weather_impact(model, X_test, y_test, feature_names):
     
     参数:
         model: 训练好的模型
-        X_test: 测���集特征
+        X_test: 测试集特征
         y_test: 测试集标签
         feature_names: 特征名列表
     """
@@ -323,34 +323,36 @@ def shap_analysis(model, X_sample, model_name, results_dir):
         raise
 
 def plot_training_history(history, model_name, results_dir):
-    """绘制训练和验证集的损失和 MAE 曲线"""
-    epochs = range(1, len(history.history['loss']) + 1)
+    """绘制模型训练历史"""
+    # 确保目录存在
+    figures_dir = os.path.join(results_dir, 'figures')
+    os.makedirs(figures_dir, exist_ok=True)
     
     plt.figure(figsize=(12, 5))
     
-    # 绘制损失曲线
+    # 损失曲线
     plt.subplot(1, 2, 1)
-    plt.plot(epochs, history.history['loss'], 'bo-', label='Training Loss')
-    plt.plot(epochs, history.history['val_loss'], 'ro-', label='Validation Loss')
-    plt.title(f'{model_name} Loss Curve')
+    plt.plot(history.history['loss'], label='Training Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.title(f'{model_name} Training History - Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
     plt.grid(True)
     
-    # 绘制 MAE 曲线
+    # MAE曲线
     plt.subplot(1, 2, 2)
-    plt.plot(epochs, history.history['mae'], 'bo-', label='Training MAE')
-    plt.plot(epochs, history.history['val_mae'], 'ro-', label='Validation MAE')
-    plt.title(f'{model_name} MAE Curve')
+    plt.plot(history.history['mae'], label='Training MAE')
+    plt.plot(history.history['val_mae'], label='Validation MAE')
+    plt.title(f'{model_name} Training History - MAE')
     plt.xlabel('Epoch')
     plt.ylabel('MAE')
     plt.legend()
     plt.grid(True)
     
     plt.tight_layout()
-    save_path = os.path.join(results_dir, f'{model_name}_learning_curve.png')
-    plt.savefig(save_path, dpi=300)
+    save_path = os.path.join(figures_dir, f'{model_name}_training_history.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
 
 def analyze_weather_features(df, weather_features, target='avg_speed'):
@@ -367,3 +369,200 @@ def analyze_weather_features(df, weather_features, target='avg_speed'):
     save_path = os.path.join(figures_dir, 'weather_correlation.png')
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
+
+def create_eda_visualizations(traffic_data, weather_data, results_dir):
+    """创建数据探索分析可视化"""
+    plt.style.use('seaborn')
+    os.makedirs(os.path.join(results_dir, 'figures'), exist_ok=True)
+    
+    # 1. 交通流量时间序列图
+    plt.figure(figsize=(15, 6))
+    daily_traffic = traffic_data.mean(axis=1).resample('D').mean()
+    plt.plot(daily_traffic.index, daily_traffic.values)
+    plt.title('Daily Traffic Flow Pattern', fontsize=14)
+    plt.xlabel('Date', fontsize=12)
+    plt.ylabel('Average Traffic Flow', fontsize=12)
+    plt.grid(True)
+    plt.savefig(os.path.join(results_dir, 'figures/traffic_pattern.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # 2. 相关性热力图
+    plt.figure(figsize=(12, 8))
+    combined_data = pd.concat([
+        traffic_data.mean(axis=1).to_frame('traffic_flow'),
+        weather_data
+    ], axis=1)
+    sns.heatmap(combined_data.corr(), annot=True, cmap='RdBu_r', center=0)
+    plt.title('Weather-Traffic Correlation Heatmap', fontsize=14)
+    plt.savefig(os.path.join(results_dir, 'figures/correlation_heatmap.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # 3. 天气变量分布图
+    weather_features = weather_data.columns[:3]  # 选择前三个天气特征
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    for i, feature in enumerate(weather_features):
+        sns.histplot(weather_data[feature], ax=axes[i], kde=True)
+        axes[i].set_title(f'{feature.capitalize()} Distribution', fontsize=12)
+    plt.tight_layout()
+    plt.savefig(os.path.join(results_dir, 'figures/weather_distributions.png'), dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_model_comparison_radar(baseline_results, enhanced_results, results_dir):
+    """创建模型性能对比雷达图"""
+    metrics = ['rmse', 'mae', 'r2', 'mape']
+    models = ['LSTM', 'GRU', 'CNN_LSTM']
+    
+    angles = np.linspace(0, 2*np.pi, len(metrics), endpoint=False)
+    
+    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
+    
+    for model in models:
+        values = []
+        for metric in metrics:
+            baseline = baseline_results[model][metric]
+            enhanced = enhanced_results[model][metric]
+            # 对于 r2，较大值更好；对于其他指标，较小值更好
+            ratio = enhanced / baseline if metric != 'r2' else baseline / enhanced
+            values.append(ratio)
+            
+        values = np.concatenate((values, [values[0]]))
+        angles_plot = np.concatenate((angles, [angles[0]]))
+        
+        ax.plot(angles_plot, values, '-o', linewidth=2, label=model)
+        ax.fill(angles_plot, values, alpha=0.25)
+    
+    ax.set_xticks(angles)
+    ax.set_xticklabels(metrics)
+    ax.set_title('Model Performance Comparison\n(Enhanced/Baseline)', fontsize=14)
+    plt.legend(loc='upper right', fontsize=10)
+    
+    save_path = os.path.join(results_dir, 'figures/model_comparison_radar.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_prediction_comparison(y_true, y_pred_baseline, y_pred_enhanced, model_name, results_dir):
+    """绘制基准模型增强模型预测结果对比"""
+    plt.figure(figsize=(15, 6))
+    
+    # 选择前200个数据点以便清晰展示
+    n_points = 200
+    x = np.arange(n_points)
+    
+    plt.plot(x, y_true[:n_points], label='Actual', linewidth=2)
+    plt.plot(x, y_pred_baseline[:n_points], '--', label='Baseline', linewidth=2)
+    plt.plot(x, y_pred_enhanced[:n_points], '--', label='Enhanced', linewidth=2)
+    
+    plt.title(f'{model_name} Prediction Comparison', fontsize=14)
+    plt.xlabel('Time Steps', fontsize=12)
+    plt.ylabel('Traffic Flow', fontsize=12)
+    plt.legend(fontsize=10)
+    plt.grid(True)
+    
+    save_path = os.path.join(results_dir, 'figures', f'{model_name}_prediction_comparison.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_error_distribution(y_true, y_pred_baseline, y_pred_enhanced, model_name, results_dir):
+    """绘制预测误差分布对比"""
+    plt.figure(figsize=(12, 6))
+    
+    errors_baseline = y_true - y_pred_baseline
+    errors_enhanced = y_true - y_pred_enhanced
+    
+    plt.hist(errors_baseline, bins=50, alpha=0.5, label='Baseline Errors', density=True)
+    plt.hist(errors_enhanced, bins=50, alpha=0.5, label='Enhanced Errors', density=True)
+    
+    plt.title(f'{model_name} Prediction Error Distribution', fontsize=14)
+    plt.xlabel('Prediction Error', fontsize=12)
+    plt.ylabel('Density', fontsize=12)
+    plt.legend(fontsize=10)
+    plt.grid(True)
+    
+    save_path = os.path.join(results_dir, 'figures', f'{model_name}_error_distribution.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_feature_importance(model, feature_names, results_dir):
+    """绘制特征重要性分析图"""
+    plt.figure(figsize=(12, 6))
+    
+    # 获取特征重要性分数
+    importances = model.feature_importances_
+    indices = np.argsort(importances)[::-1]
+    
+    plt.bar(range(len(importances)), importances[indices])
+    plt.xticks(range(len(importances)), [feature_names[i] for i in indices], rotation=45)
+    plt.title('Feature Importance Analysis', fontsize=14)
+    plt.xlabel('Features', fontsize=12)
+    plt.ylabel('Importance Score', fontsize=12)
+    plt.tight_layout()
+    
+    save_path = os.path.join(results_dir, 'figures', 'feature_importance.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_seasonal_analysis(traffic_data, weather_data, results_dir):
+    """绘制交通流量的季节性分析图"""
+    # 确保目录存在
+    figures_dir = os.path.join(results_dir, 'figures')
+    os.makedirs(figures_dir, exist_ok=True)
+    
+    plt.figure(figsize=(15, 10))
+    
+    # 按小时分析
+    plt.subplot(2, 1, 1)
+    hourly_pattern = traffic_data.groupby(traffic_data.index.hour).mean()
+    plt.plot(hourly_pattern.index, hourly_pattern.values, marker='o')
+    plt.title('Average Traffic Flow by Hour', fontsize=14)
+    plt.xlabel('Hour of Day', fontsize=12)
+    plt.ylabel('Average Traffic Flow', fontsize=12)
+    plt.grid(True)
+    
+    # 按星期分析
+    plt.subplot(2, 1, 2)
+    weekly_pattern = traffic_data.groupby(traffic_data.index.dayofweek).mean()
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    plt.plot(weekly_pattern.index, weekly_pattern.values, marker='o')
+    plt.xticks(range(7), days, rotation=45)
+    plt.title('Average Traffic Flow by Day of Week', fontsize=14)
+    plt.xlabel('Day of Week', fontsize=12)
+    plt.ylabel('Average Traffic Flow', fontsize=12)
+    plt.grid(True)
+    
+    plt.tight_layout()
+    save_path = os.path.join(figures_dir, 'seasonal_analysis.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+def analyze_feature_importance(model, X_train, y_train, feature_names, results_dir):
+    """分析特征重要性"""
+    plt.figure(figsize=(15, 8))
+    
+    # 使用排列重要性
+    perm_importance = permutation_importance(
+        model, X_train, y_train,
+        n_repeats=10,
+        random_state=42
+    )
+    
+    # 获取特征重要性分数
+    importances = pd.DataFrame(
+        {'feature': feature_names,
+         'importance': perm_importance.importances_mean}
+    )
+    importances = importances.sort_values('importance', ascending=False)
+    
+    # 绘制特征重要性条形图
+    plt.figure(figsize=(12, 6))
+    sns.barplot(data=importances.head(20), x='importance', y='feature')
+    plt.title('Top 20 Most Important Features', fontsize=14)
+    plt.xlabel('Importance Score', fontsize=12)
+    plt.ylabel('Feature', fontsize=12)
+    plt.tight_layout()
+    
+    # 保存图像
+    save_path = os.path.join(results_dir, 'figures', 'feature_importance.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    return importances

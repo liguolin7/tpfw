@@ -143,26 +143,16 @@ class BaselineModels:
         
         return CustomCallback()
         
-    def predict(self, model_type, X):
-        """通用预测方法
-        
-        Args:
-            model_type (str): 模型类型 ('lstm', 'gru', 'cnn_lstm')
-            X (np.ndarray or pd.DataFrame): 输入数据
-            
-        Returns:
-            np.ndarray: 预测结果
-        """
-        if self.models[model_type] is None:
-            raise ValueError(f"{model_type}模型未训练")
-        
-        if isinstance(X, np.ndarray):
-            X_reshaped = X
-        else:
-            X_reshaped = X.values.reshape((X.shape[0], X.shape[1], 1))
-        
-        return self.models[model_type].predict(X_reshaped).flatten()
-        
+    def predict(self, model_name, X):
+        """使用指定模型进行预测"""
+        try:
+            if model_name.lower() not in self.models:
+                raise ValueError(f"Model {model_name} not found")
+            return self.models[model_name.lower()].predict(X)
+        except Exception as e:
+            logging.error(f"预测时出错: {str(e)}")
+            raise
+    
     def create_gru_model(self, input_shape):
         """创建GRU模型"""
         config = MODEL_CONFIG['GRU']

@@ -230,3 +230,57 @@ class DataProcessor:
         )
         
         return scaled_data
+        
+    def prepare_sequences(self, traffic_data, weather_data=None):
+        """准备序列数据
+        
+        Args:
+            traffic_data: 交通数据
+            weather_data: 天气数据（可选）
+            
+        Returns:
+            X_train, X_val, X_test, y_train, y_val, y_test
+        """
+        try:
+            # 处理交通数据
+            traffic_processed = self.process_traffic_data(traffic_data)
+            
+            if weather_data is not None:
+                # 处理天气数据
+                weather_processed = self.process_weather_data(weather_data)
+                # 合并数据
+                data = self.align_and_merge_data(traffic_processed, weather_processed)
+            else:
+                data = traffic_processed
+                
+            # 创建特征
+            data = self.create_features(data, include_weather=(weather_data is not None))
+            
+            # 标准化数据
+            data_scaled = self.prepare_data(data)
+            
+            # 分割数据集
+            total_samples = len(data_scaled)
+            train_size = int(total_samples * 0.5)
+            val_size = int(total_samples * 0.25)
+            
+            # 准备特征和目标变量
+            X = data_scaled.drop('target', axis=1)
+            y = data_scaled['target']
+            
+            # 分割数据
+            X_train = X[:train_size]
+            y_train = y[:train_size]
+            
+            X_val = X[train_size:train_size+val_size]
+            y_val = y[train_size:train_size+val_size]
+            
+            X_test = X[train_size+val_size:]
+            y_test = y[train_size+val_size:]
+            
+            logging.info("数据序列准备完成")
+            return X_train, X_val, X_test, y_train, y_val, y_test
+            
+        except Exception as e:
+            logging.error(f"准备数据序列时出错: {str(e)}")
+            raise

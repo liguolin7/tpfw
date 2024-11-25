@@ -68,9 +68,9 @@ def create_directories():
             os.makedirs(directory)
 
 def train_and_evaluate_models(
-    X_train, X_val, X_test,
-    y_train, y_val, y_test,
-    feature_names,
+    X_train, y_train,
+    X_val, y_val,
+    X_test, y_test,
     experiment_name,
     results_dir
 ):
@@ -78,13 +78,11 @@ def train_and_evaluate_models(
     logging.info(f"\n{'='*50}")
     logging.info(f"开始 {experiment_name} 实验")
     logging.info(f"{'='*50}")
-    logging.info(f"数据集大小:")
-    logging.info(f"训练集: {X_train.shape}")
-    logging.info(f"验证集: {X_val.shape}")
-    logging.info(f"测试集: {X_test.shape}")
     
     models = BaselineModels()
     results = {}
+    best_model = None
+    best_score = float('-inf')
     
     # 模型配置
     model_configs = [
@@ -103,54 +101,63 @@ def train_and_evaluate_models(
         
         # 训练模型
         history = train_func(X_train_reshaped, y_train, X_val_reshaped, y_val)
-        model = models.get_model(model_name)
         
-        # 绘制学习曲线
+        # 保存训练历史
         plot_training_history(history, model_name, results_dir)
         
-        # 进行预测
-        y_pred = model.predict(X_test_reshaped).flatten()
-        # 评估模型
-        results[model_name] = evaluate_model(y_test, y_pred, model_name)
+        # 预测和评估
+        y_pred = predict_func(X_test_reshaped).flatten()
+        model_results = evaluate_model(y_test, y_pred, model_name)
+        results[model_name] = model_results
         
-        # 绘制预测结果图
+        # 更新最佳模型
+        if model_results['r2'] > best_score:
+            best_score = model_results['r2']
+            best_model = models.get_model(model_name.lower())
+        
+        # 绘制预测结果
         plot_predictions(y_test, y_pred, model_name, results_dir)
-        
-        # 执行 SHAP 分析
-        X_sample = X_test_reshaped[:100]  # 示例：取前 100 个样本
-        shap_analysis(model, X_sample, model_name, results_dir)
     
-    return results
+    return results, best_model
 
 def run_experiments():
-    """运行对比实验"""
+    """运行所有实验"""
     try:
         # 加载数据
         traffic_data = load_traffic_data()
         weather_data = load_weather_data()
         
-        # 数据预处理
-        logging.info("数据预处理...")
+        # 创建数据处理器
         processor = DataProcessor()
         
-        # 基础实验（只使用交通数据）
-        baseline_data = processor.prepare_data(traffic_data)
-        baseline_results = run_single_experiment(processor, baseline_data, 'baseline')
+        # 准备基准实验数据
+        baseline_data = {
+            'traffic_data': traffic_data,
+            'weather_data': None
+        }
         
-        # 增强实验（使用交通+天气数据）
-        enhanced_data = processor.prepare_data(traffic_data, weather_data)
-        enhanced_results = run_single_experiment(processor, enhanced_data, 'enhanced')
+        # 准备增强实验数据
+        enhanced_data = {
+            'traffic_data': traffic_data,
+            'weather_data': weather_data
+        }
         
-        # 计算性能提升
-        improvements = calculate_improvement(baseline_results, enhanced_results)
+        logging.info("数据预处理...")
+        
+        # 运行基准实验和增强实验
+        baseline_results, baseline_model = run_single_experiment(processor, baseline_data, 'baseline')
+        enhanced_results, enhanced_model = run_single_experiment(processor, enhanced_data, 'enhanced')
+        
+        # 计算改进
+        improvements = calculate_improvements(baseline_results, enhanced_results)
         
         return baseline_results, enhanced_results, improvements
         
     except Exception as e:
-        logging.error(f"实验过程中出现错误: {str(e)}")
+        logging.error(f"实验程中出现错误: {str(e)}")
         raise
 
-def calculate_improvement(baseline_results, enhanced_results):
+def calculate_improvements(baseline_results, enhanced_results):
     """计算模型性能提升"""
     improvements = {}
     metrics = ['rmse', 'mae', 'r2', 'mape']
@@ -173,50 +180,80 @@ def calculate_improvement(baseline_results, enhanced_results):
     return improvements
 
 def main():
-    create_directories()
+    """主函数"""
+    # 配置日志和硬件
     setup_logging()
+    configure_hardware()
     
-    # 固定随机种子
-    os.environ['PYTHONHASHSEED'] = str(RANDOM_SEED)
-    random.seed(RANDOM_SEED)
-    np.random.seed(RANDOM_SEED)
-    tf.random.set_seed(RANDOM_SEED)
+    # 加载数据
+    traffic_data = load_traffic_data()
+    weather_data = load_weather_data()
     
+    # 创建数据处理器
+    processor = DataProcessor()
+    
+    # 运行实验
+    baseline_results, enhanced_results, improvements = run_experiments()
+    
+    # 准备特征名称
+    traffic_features = list(traffic_data.columns)
+    weather_features = list(weather_data.columns) if weather_data is not None else []
+    all_features = traffic_features + weather_features
+    
+    # 创建结果目录
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    final_results_dir = os.path.join(RESULTS_DIR, f'final_results_{timestamp}')
+    figures_dir = os.path.join(final_results_dir, 'figures')
+    os.makedirs(figures_dir, exist_ok=True)
+    
+    # 绘制季节性分析
+    plot_seasonal_analysis(traffic_data, weather_data, final_results_dir)
+    
+    # 绘制模型对比图
+    plot_model_comparison(baseline_results, enhanced_results, final_results_dir)
+    
+    # 打印实验总结
+    print_experiment_summary(baseline_results, enhanced_results, improvements)
+
+def run_single_experiment(processor, data, experiment_type):
+    """运行单个实验"""
     try:
-        # 运行实验
-        baseline_results, enhanced_results, improvements = run_experiments()
+        # 创建实验目录
+        results_dir = create_experiment_directories(experiment_type)
         
-        # 保存结果并输出总结
-        save_experiment_results(baseline_results, enhanced_results, improvements)
-        print_experiment_summary(baseline_results, enhanced_results, improvements)
+        # 数据准备
+        X_train, X_val, X_test, y_train, y_val, y_test = processor.prepare_sequences(
+            data['traffic_data'], 
+            data['weather_data']
+        )
+        
+        logging.info(f"\n{'='*50}")
+        logging.info(f"开始 {experiment_type} 实验")
+        logging.info("="*50)
+        
+        # 打印数据集大小
+        logging.info("数据集大小:")
+        logging.info(f"训练集: {X_train.shape}")
+        logging.info(f"验证集: {X_val.shape}")
+        logging.info(f"测试集: {X_test.shape}")
+        
+        # 训练和评估模型
+        results, best_model = train_and_evaluate_models(
+            X_train=X_train, 
+            y_train=y_train,
+            X_val=X_val, 
+            y_val=y_val,
+            X_test=X_test, 
+            y_test=y_test,
+            experiment_name=experiment_type,
+            results_dir=results_dir
+        )
+        
+        return results, best_model
         
     except Exception as e:
         logging.error(f"实验过程中出现错误: {str(e)}")
         raise
-
-def run_single_experiment(processor, data, experiment_name):
-    """运行单个实验"""
-    # 获取特征列表
-    feature_names = data.columns.tolist()
-    
-    # 划分数据集
-    X_train, X_val, X_test, y_train, y_val, y_test = processor.split_data(data)
-    
-    # 定义结果保存目录
-    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    results_dir = os.path.join(RESULTS_DIR, f'{experiment_name}_results_{timestamp}')
-    os.makedirs(results_dir, exist_ok=True)
-    
-    # 训练和评估模型
-    results = train_and_evaluate_models(
-        X_train, X_val, X_test,
-        y_train, y_val, y_test,
-        feature_names,
-        experiment_name,
-        results_dir
-    )
-    
-    return results
 
 def save_experiment_results(baseline_results, enhanced_results, improvements):
     """保存实验结果和对比分析"""
@@ -311,6 +348,17 @@ def configure_hardware():
         
     except Exception as e:
         logging.error(f"Hardware configuration error: {str(e)}")
+
+def create_experiment_directories(experiment_type):
+    """创建实验结果目录"""
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    results_dir = os.path.join(RESULTS_DIR, f'{experiment_type}_results_{timestamp}')
+    figures_dir = os.path.join(results_dir, 'figures')
+    
+    # 创建目录
+    os.makedirs(figures_dir, exist_ok=True)
+    
+    return results_dir
 
 if __name__ == "__main__":
     main() 
