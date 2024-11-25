@@ -13,18 +13,21 @@ from sklearn.inspection import permutation_importance
 def evaluate_model(y_true, y_pred, model_name):
     """评估模型性能并返回结果"""
     results = {
-        'test_rmse': np.sqrt(mean_squared_error(y_true, y_pred)),
-        'test_mae': mean_absolute_error(y_true, y_pred),
-        'test_r2': r2_score(y_true, y_pred)
+        'rmse': np.sqrt(mean_squared_error(y_true, y_pred)),
+        'mae': mean_absolute_error(y_true, y_pred),
+        'r2': r2_score(y_true, y_pred),
+        'mape': mean_absolute_percentage_error(y_true, y_pred)
     }
     
-    # 简洁地输出所有关键指标
-    logging.info(f"{model_name:<15} RMSE: {results['test_rmse']:.4f}, MAE: {results['test_mae']:.4f}, R2: {results['test_r2']:.4f}")
+    # 只输出一次评估结果
+    logging.info(f"\n{model_name} 模型评估结果:")
+    for metric, value in results.items():
+        logging.info(f"{metric}: {value:.4f}")
     
     return results
 
 def plot_predictions(y_true, y_pred, model_name):
-    """Plot prediction results comparison"""
+    """绘制预测结果对比图"""
     plt.figure(figsize=(15, 8))
     plt.plot(y_true.index[-100:], y_true[-100:], label='Actual', linewidth=2)
     plt.plot(y_true.index[-100:], y_pred[-100:], label='Predicted', linewidth=2, linestyle='--')
@@ -40,12 +43,12 @@ def plot_predictions(y_true, y_pred, model_name):
     plt.close()
 
 def plot_residuals(y_true, y_pred, model_name):
-    """Plot residual analysis"""
+    """绘制残差分析图"""
     residuals = y_true - y_pred
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
     
-    # Residual scatter plot
+    # 残差散点图
     ax1.scatter(y_pred, residuals, alpha=0.5, color='blue')
     ax1.axhline(y=0, color='r', linestyle='--')
     ax1.set_xlabel('Predicted Values', fontsize=12)
@@ -53,7 +56,7 @@ def plot_residuals(y_true, y_pred, model_name):
     ax1.set_title('Residuals vs Predicted', fontsize=14)
     ax1.grid(True)
     
-    # Residual distribution
+    # 残差分布图
     sns.histplot(residuals, kde=True, ax=ax2, color='blue')
     ax2.axvline(x=0, color='r', linestyle='--')
     ax2.set_xlabel('Residuals', fontsize=12)
@@ -68,7 +71,7 @@ def plot_residuals(y_true, y_pred, model_name):
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     
-    # Record residual statistics
+    # 记录残差统计信息
     residuals_stats = {
         'mean': np.mean(residuals),
         'std': np.std(residuals),
@@ -81,12 +84,12 @@ def plot_residuals(y_true, y_pred, model_name):
         logging.info(f"{stat}: {value:.4f}")
 
 def plot_feature_importance(model, feature_names, model_name):
-    """Plot feature importance (only applicable to random forest models)
+    """绘制特征重要性图（仅适用于随机森林模型）
     
-    Args:
-        model: Trained model
-        feature_names: List of feature names
-        model_name: Model name
+    参数:
+        model: 训练好的模型
+        feature_names: 特征名称列表
+        model_name: 模型名称
     """
     if not hasattr(model, 'feature_importances_'):
         logging.warning(f"{model_name} does not support feature importance analysis")
@@ -111,7 +114,7 @@ def plot_feature_importance(model, feature_names, model_name):
 def find_best_model(improvements):
     """根据性能提升找出最佳模型
     
-    Args:
+    参数:
         improvements: 性能提升分析结果
     """
     model_scores = {}
@@ -135,7 +138,7 @@ def find_best_model(improvements):
     
     return best_model[0]
     
-def plot_model_comparison(baseline_results, enhanced_results, metrics=['rmse', 'mae', 'r2']):
+def plot_model_comparison(baseline_results, enhanced_results, metrics=['rmse', 'mae', 'r2', 'mape']):
     """绘制基础模型和增强模型的性能对比图"""
     plt.figure(figsize=(15, 5 * len(metrics)))
     
@@ -143,14 +146,32 @@ def plot_model_comparison(baseline_results, enhanced_results, metrics=['rmse', '
         plt.subplot(len(metrics), 1, i)
         
         models = list(baseline_results.keys())
-        baseline_values = [baseline_results[model][f'test_{metric}'] for model in models]
-        enhanced_values = [enhanced_results[model][f'test_{metric}'] for model in models]
+        baseline_values = [baseline_results[model][metric] for model in models]
+        enhanced_values = [enhanced_results[model][metric] for model in models]
         
         x = np.arange(len(models))
         width = 0.35
         
-        plt.bar(x - width/2, baseline_values, width, label='Baseline', color='skyblue')
-        plt.bar(x + width/2, enhanced_values, width, label='Enhanced', color='lightgreen')
+        # 添加百分比改进标签
+        improvements = [(e - b) / b * 100 if metric != 'r2' else (abs(e) - abs(b)) / abs(b) * 100
+                       for b, e in zip(baseline_values, enhanced_values)]
+        
+        bars1 = plt.bar(x - width/2, baseline_values, width, label='Baseline', color='skyblue')
+        bars2 = plt.bar(x + width/2, enhanced_values, width, label='Enhanced', color='lightgreen')
+        
+        # 添加数值标签
+        for bars in [bars1, bars2]:
+            for bar in bars:
+                height = bar.get_height()
+                plt.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{height:.2f}',
+                        ha='center', va='bottom')
+        
+        # 添加改进百分比
+        for idx, imp in enumerate(improvements):
+            plt.text(x[idx], max(baseline_values[idx], enhanced_values[idx]),
+                    f'{imp:+.2f}%',
+                    ha='center', va='bottom', color='red')
         
         plt.title(f'{metric.upper()} Comparison')
         plt.xlabel('Models')
@@ -232,7 +253,7 @@ def plot_time_series_decomposition(data, model_name):
 def analyze_weather_impact(model, X_test, y_test, feature_names):
     """分析天气特征对预测的影响
     
-    Args:
+    参数:
         model: 训练好的模型
         X_test: 测试集特征
         y_test: 测试集标签
@@ -334,5 +355,4 @@ def shap_analysis(model, X_test, feature_names, model_name):
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     
-    return shap_values
-    
+    return shap_values    

@@ -9,13 +9,24 @@ import numpy as np
 from tqdm import tqdm
 import shap
 from sklearn.model_selection import KFold
+import tensorflow as tf
 
 def setup_logging():
     """配置日志输出"""
-    # 创建logs目录
+    formatter = logging.Formatter(
+        '%(asctime)s | %(levelname)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # 创建logs和results目录
     log_dir = 'logs'
+    results_dir = 'results/experiment_outputs'
     os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(results_dir, exist_ok=True)
+    
+    # 设置日志文件路径
     log_file = os.path.join(log_dir, 'experiment.log')
+    output_file = os.path.join(results_dir, 'experiment_output.txt')
     
     # 配置日志格式
     formatter = logging.Formatter('%(asctime)s | %(message)s', datefmt='%H:%M:%S')
@@ -23,208 +34,111 @@ def setup_logging():
     # 文件处理器
     file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
     file_handler.setFormatter(formatter)
+    file_handler.setLevel(logging.INFO)
+    
+    # 输出结果处理器
+    output_handler = logging.FileHandler(output_file, mode='w', encoding='utf-8')
+    output_handler.setFormatter(formatter)
+    output_handler.setLevel(logging.INFO)
     
     # 控制台处理器
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
+    console_handler.setLevel(logging.INFO)
     
     # 配置根日志记录器
     logging.basicConfig(
         level=logging.INFO,
-        handlers=[file_handler, console_handler]
+        handlers=[file_handler, output_handler, console_handler]
     )
     
-    # 设置第三方库的日志级别
-    logging.getLogger('matplotlib').setLevel(logging.WARNING)
-    logging.getLogger('tensorflow').setLevel(logging.ERROR)
-    logging.getLogger('shap').setLevel(logging.WARNING)
-    logging.getLogger('sklearn').setLevel(logging.WARNING)
+    # 设置所有第三方库的日志级别为 ERROR
+    for logger_name in logging.root.manager.loggerDict:
+        logging.getLogger(logger_name).setLevel(logging.ERROR)
+    
+    # 禁用 TensorFlow 的警告和信息输出
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    tf.get_logger().setLevel('ERROR')
 
 def train_and_evaluate_models(X_train, X_val, X_test, y_train, y_val, y_test, feature_names, experiment_name):
-    """添加交叉验证的训练和评估"""
-    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    """训练和评估模型"""
+    logging.info(f"\n{'='*50}")
+    logging.info(f"开始{experiment_name}实验")
+    logging.info(f"{'='*50}")
+    logging.info(f"数据集大小:")
+    logging.info(f"训练集: {X_train.shape}")
+    logging.info(f"验证集: {X_val.shape}")
+    logging.info(f"测试集: {X_test.shape}")
     
     models = BaselineModels()
     results = {}
     
-    # 使用tqdm创建进度条
+    # 使用自定义进度条
     model_configs = [
-        ('LinearRegression', (models.train_linear_regression, models.predict_linear_regression)),
-        ('RandomForest', (models.train_random_forest, models.predict_random_forest)),
-        ('LSTM', (models.train_lstm, models.predict_lstm))
+        ('LSTM', (models.train_lstm, models.predict_lstm)),
+        ('GRU', (models.train_gru, models.predict_gru)),
+        ('Transformer', (models.train_transformer, models.predict_transformer))
     ]
     
-    logging.info("开始模型训练和评估...")
-    
-    for model_name, model_func in tqdm(model_configs, desc="训练模型"):
-        cv_scores = {
-            'rmse': [],
-            'mae': [],
-            'r2': []
-        }
+    for model_name, (train_func, predict_func) in model_configs:
+        logging.info(f"\n{'-'*20} {model_name} 模型训练 {'-'*20}")
         
-        # 执行交叉验证
-        for fold, (train_idx, val_idx) in enumerate(kf.split(X_train)):
-            X_fold_train, X_fold_val = X_train.iloc[train_idx], X_train.iloc[val_idx]
-            y_fold_train, y_fold_val = y_train.iloc[train_idx], y_train.iloc[val_idx]
+        # 重塑数据
+        X_train_reshaped = X_train.values.reshape((X_train.shape[0], X_train.shape[1], 1))
+        X_val_reshaped = X_val.values.reshape((X_val.shape[0], X_val.shape[1], 1))
+        X_test_reshaped = X_test.values.reshape((X_test.shape[0], X_test.shape[1], 1))
+        
+        # 添加训练验证
+        history = train_func(X_train_reshaped, y_train, X_val_reshaped, y_val)
+        
+        # 验证训练是否成功
+        if history is None or not hasattr(history, 'history'):
+            logging.error(f"{model_name} 模型训练失败")
+            continue
             
-            # 训练模型
-            if model_name == 'LSTM':
-                # 创建LSTM模型
-                input_shape = (X_train.shape[1], 1)  # 调整输入形状
-                models.create_lstm_model(input_shape)
-                
-                # 重塑数据以适应LSTM
-                X_fold_train_reshaped = X_fold_train.values.reshape((X_fold_train.shape[0], X_fold_train.shape[1], 1))
-                X_fold_val_reshaped = X_fold_val.values.reshape((X_fold_val.shape[0], X_fold_val.shape[1], 1))
-                
-                # 训练模型
-                models.train_lstm(X_fold_train_reshaped, y_fold_train, X_fold_val_reshaped, y_fold_val)
-                y_fold_pred = models.predict_lstm(X_fold_val_reshaped)
-            else:
-                train_func, predict_func = model_func
-                train_func(X_fold_train, y_fold_train)
-                y_fold_pred = predict_func(X_fold_val)
-                
-                # 计算验证集分数
-                fold_scores = evaluate_model(y_fold_val, y_fold_pred, f"{model_name}_fold_{fold}")
-                for metric in cv_scores.keys():
-                    cv_scores[metric].append(fold_scores[f'test_{metric}'])
-        
-        # 记录交叉验证结果
-        results[model_name] = {
-            'cv_rmse_mean': np.mean(cv_scores['rmse']),
-            'cv_rmse_std': np.std(cv_scores['rmse']),
-            'cv_mae_mean': np.mean(cv_scores['mae']),
-            'cv_mae_std': np.std(cv_scores['mae']),
-            'cv_r2_mean': np.mean(cv_scores['r2']),
-            'cv_r2_std': np.std(cv_scores['r2'])
-        }
-        
-        # 在完整测试集上评估
-        logging.info(f"开始训练{model_name}模型...")
-        
-        # 训练和预测
-        train_func, predict_func = model_func
-        
-        # 对LSTM模型特殊处理
-        if model_name == 'LSTM':
-            # 创建LSTM模型
-            input_shape = (X_train.shape[1], 1)  # 调整输入形状
-            models.create_lstm_model(input_shape)
-            
-            # 重塑数据以适应LSTM
-            X_train_reshaped = X_train.values.reshape((X_train.shape[0], X_train.shape[1], 1))
-            X_val_reshaped = X_val.values.reshape((X_val.shape[0], X_val.shape[1], 1))
-            X_test_reshaped = X_test.values.reshape((X_test.shape[0], X_test.shape[1], 1))
-            
-            # 训练模型
-            train_func(X_train_reshaped, y_train, X_val_reshaped, y_val)
-            y_pred = predict_func(X_test_reshaped)
-        else:
-            train_func(X_train, y_train)
-            y_pred = predict_func(X_test)
-        
-        # 评估和可视化
+        y_pred = predict_func(X_test_reshaped)
         results[model_name] = evaluate_model(y_test, y_pred, model_name)
-        plot_predictions(y_test, y_pred, model_name)
-        plot_prediction_distribution(y_test, y_pred, model_name)
         
-        # 详细的模型性能分析
-        detailed_stats = detailed_model_analysis(y_test, y_pred, model_name)
-        results[model_name].update({
-            'detailed_stats': detailed_stats
-        })
-        
-        # 如果是增强模型（包含天气特征）
-        if 'enhanced' in experiment_name:
-            try:
-                weather_impact = analyze_weather_impact(
-                    models.get_model(model_name),
-                    X_test if model_name != 'LSTM' else X_test_reshaped,
-                    y_test,
-                    feature_names
-                )
-                results[model_name]['weather_impact'] = weather_impact
-            except Exception as e:
-                logging.warning(f"无法分析{model_name}的天气影响: {str(e)}")
-        
-        # SHAP值分析（对于支持的模型）
-        try:
-            if model_name != 'LSTM':  # 暂时跳过LSTM的SHAP分析
-                # 限制背景数据样本数量
-                background_data = shap.sample(X_test, 100)  # 只���用100个背景样本
-                
-                if model_name == 'LinearRegression':
-                    explainer = shap.LinearExplainer(
-                        models.get_model(model_name), 
-                        background_data,
-                        feature_names=feature_names,
-                        check_additivity=False  # 禁用加性检查
-                    )
-                else:
-                    explainer = shap.TreeExplainer(
-                        models.get_model(model_name),
-                        background_data,
-                        feature_names=feature_names,
-                        check_additivity=False  # 禁用加性检查
-                    )
-                
-                # 只计算部分测试样本的SHAP值
-                test_sample = X_test.sample(n=min(500, len(X_test)), random_state=42)
-                shap_values = explainer.shap_values(test_sample)
-                
-                results[model_name]['shap_values'] = {
-                    'values': shap_values,
-                    'feature_names': feature_names
-                }
-        except Exception as e:
-            logging.warning(f"无法为{model_name}执行SHAP分析: {str(e)}")
-    
     return results
 
 def run_experiments():
-    """运行基础实验和增强实验"""
-    setup_logging()
-    
-    logging.info("开始实验...")
-    
-    # 加载数据
-    traffic_data = load_traffic_data()
-    weather_data = load_weather_data()
-    
-    processor = DataProcessor()
-    
-    # 准备实验数据
-    logging.info("数据预处理...")
-    baseline_data = processor.prepare_baseline_data(traffic_data)
-    enhanced_data = processor.prepare_enhanced_data(traffic_data, weather_data)
-    
-    # 运行实验
-    logging.info("基础实验...")
-    baseline_results = run_single_experiment(processor, baseline_data, 'baseline')
-    
-    logging.info("增强实验...")
-    enhanced_results = run_single_experiment(processor, enhanced_data, 'enhanced')
-    
-    # 分析结果
-    improvements = calculate_improvement(baseline_results, enhanced_results)
-    best_model = find_best_model(improvements)
-    
-    logging.info(f"最佳模型: {best_model}")
-    
-    return baseline_results, enhanced_results, improvements
+    """运行对比实验"""
+    try:
+        # 加载数据
+        traffic_data = load_traffic_data()
+        weather_data = load_weather_data()
+        
+        # 数据预处理
+        logging.info("数据预处理...")
+        processor = DataProcessor()
+        
+        # 基础实验（只使用交通数据）
+        baseline_data = processor.prepare_data(traffic_data)
+        baseline_results = run_single_experiment(processor, baseline_data, 'baseline')
+        
+        # 增强实验（使用交通+天气数据）
+        enhanced_data = processor.prepare_data(traffic_data, weather_data)
+        enhanced_results = run_single_experiment(processor, enhanced_data, 'enhanced')
+        
+        # 计算性能提升
+        improvements = calculate_improvement(baseline_results, enhanced_results)
+        
+        return baseline_results, enhanced_results, improvements
+        
+    except Exception as e:
+        logging.error(f"实验过程中出现错误: {str(e)}")
+        raise
 
 def calculate_improvement(baseline_results, enhanced_results):
     """计算模型性能提升"""
     improvements = {}
-    metrics = ['rmse', 'mae', 'r2']
+    metrics = ['rmse', 'mae', 'r2', 'mape']
     
     for model in baseline_results.keys():
         improvements[model] = {}
         for metric in metrics:
-            baseline = baseline_results[model][f'test_{metric}']
-            enhanced = enhanced_results[model][f'test_{metric}']
+            baseline = baseline_results[model][metric]
+            enhanced = enhanced_results[model][metric]
             
             if metric == 'r2':
                 # R2提升百分比
@@ -239,28 +153,21 @@ def calculate_improvement(baseline_results, enhanced_results):
 
 def main():
     setup_logging()
-    logging.info("开始对比实验...")
     
     try:
-        # 运行两组实验
+        # 运行实验
         baseline_results, enhanced_results, improvements = run_experiments()
         
-        # 保存结果
-        save_experiment_results(
-            baseline_results, 
-            enhanced_results, 
-            improvements
-        )
-        
-        # 输出最佳模型
-        find_best_model(improvements)
+        # 保存结果并输出总结
+        save_experiment_results(baseline_results, enhanced_results, improvements)
+        print_experiment_summary(baseline_results, enhanced_results, improvements)
         
     except Exception as e:
         logging.error(f"实验过程中出现错误: {str(e)}")
         raise
 
 def run_single_experiment(processor, data, experiment_name):
-    """运行单个实验（基础或增强）"""
+    """运行单个实验"""
     # 划分数据集
     X_train, X_val, X_test, y_train, y_val, y_test = processor.split_data(data)
     feature_names = X_train.columns.tolist()
@@ -289,12 +196,12 @@ def save_experiment_results(baseline_results, enhanced_results, improvements):
     comparison_data = []
     
     for model in improvements.keys():
-        for metric in ['rmse', 'mae', 'r2']:
+        for metric in ['rmse', 'mae', 'r2', 'mape']:
             comparison_data.append({
                 'Model': model,
                 'Metric': metric,
-                'Baseline': baseline_results[model][f'test_{metric}'],
-                'Enhanced': enhanced_results[model][f'test_{metric}'],
+                'Baseline': baseline_results[model][metric],
+                'Enhanced': enhanced_results[model][metric],
                 'Improvement(%)': improvements[model][f'{metric}_improvement']
             })
     
@@ -305,8 +212,42 @@ def save_experiment_results(baseline_results, enhanced_results, improvements):
     comparison_df.to_csv(os.path.join(results_dir, 'model_comparison.csv'), index=False)
     logging.info("实验结果已保存")
     
-    # 添加现有代码的基础上
+    # 绘制对比图
     plot_model_comparison(baseline_results, enhanced_results)
+
+def find_best_model(improvements):
+    """找出性能提升最好的模型"""
+    avg_improvements = {}
+    for model, metrics in improvements.items():
+        avg_improvements[model] = np.mean([v for v in metrics.values()])
+    
+    return max(avg_improvements.items(), key=lambda x: x[1])[0]
+
+def calculate_average_improvement(model_improvements):
+    """计算平均性能提升"""
+    return np.mean([v for v in model_improvements.values()])
+
+def print_experiment_summary(baseline_results, enhanced_results, improvements):
+    """打印实验总结"""
+    logging.info("\n=== 实验总结 ===")
+    logging.info("=" * 50)
+    
+    metrics = ['rmse', 'mae', 'r2', 'mape']
+    models = ['LSTM', 'GRU', 'Transformer']
+    
+    # 只输出一次性能提升结果
+    logging.info("\n性能提升结果:")
+    for model in models:
+        logging.info(f"\n{model} 模型:")
+        for metric in metrics:
+            imp = improvements[model].get(f'{metric}_improvement', 0)
+            logging.info(f"{metric}_improvement: {imp:>7.2f}%")
+    
+    # 输出最佳模型信息
+    best_model = find_best_model(improvements)
+    avg_improvement = calculate_average_improvement(improvements[best_model])
+    logging.info(f"\n最佳模型: {best_model}")
+    logging.info(f"平均性能提升: {avg_improvement:.2f}%")
 
 if __name__ == "__main__":
     main() 

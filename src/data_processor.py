@@ -1,7 +1,10 @@
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
-from config import *
+from config import (
+    TRAIN_RATIO, VAL_RATIO, TEST_RATIO, 
+    RANDOM_STATE, TRAINING_CONFIG
+)
 import logging
 from tqdm import tqdm
 
@@ -13,42 +16,33 @@ class DataProcessor:
         """处理交通数据
         
         Args:
-            df: 原始交通数据DataFrame
+            df (pd.DataFrame): 原始交通数据
+        
         Returns:
-            处理后的交通数据DataFrame
+            pd.DataFrame: 处理后的数据
         """
-        logging.info("开始处理交通数据...")
+        # 将时间索引转换为datetime
+        df.index = pd.to_datetime(df.index)
         
-        # 检查缺失值
-        missing_stats = df.isnull().sum()
-        logging.info(f"缺失值统计:\n{missing_stats}")
-        
-        # 处理缺失值
-        df = df.fillna(method='ffill').fillna(method='bfill')
-        
-        # 添加时间特征
-        df['hour'] = df.index.hour
-        df['dayofweek'] = df.index.dayofweek
-        
-        # 计算每个传感器的平均速度
+        # 计算所有传感器的平均速度
         df['avg_speed'] = df.mean(axis=1)
         
-        logging.info("交通数据处理完成")
+        # 移除空值
+        df = df.dropna()
+        
+        # 移除异常值 (比如速度为0或异常高的值)
+        df = df[(df['avg_speed'] > 0) & (df['avg_speed'] < 100)]
+        
         return df
         
     def process_weather_data(self, df):
-        """处理天气数据
-        
-        Args:
-            df: 原始天气数据DataFrame
-        Returns:
-            处理后的天气数据DataFrame
-        """
+        """处理天气数据"""
         logging.info("开始处理天气数据...")
         
         # 检查缺失值
-        missing_stats = df.isnull().sum()
-        logging.info(f"天气数据缺失值统计:\n{missing_stats}")
+        missing_columns = df.isnull().sum()[df.isnull().sum() > 0].shape[0]
+        if missing_columns > 0:
+            logging.info(f"处理{missing_columns}个含缺失值的天气特征...")
         
         # 处理缺失值
         df = df.fillna(method='ffill').fillna(method='bfill')
@@ -85,7 +79,7 @@ class DataProcessor:
         
         Args:
             traffic_df: 处理后的交通数据
-            weather_df: 处理后的天气数据
+            weather_df: 理后的天气数据
         Returns:
             合并后的DataFrame
         """
@@ -109,122 +103,83 @@ class DataProcessor:
         logging.info(f"数据合并完成，最终数据形状: {merged_df.shape}")
         return merged_df
         
-    def create_features(self, df):
+    def create_features(self, df, include_weather=True):
         """创建特征
         
         Args:
-            df: 合并后的DataFrame
-        Returns:
-            添加特征后的DataFrame
-        """
-        logging.info("开始特征工程...")
+            df (pd.DataFrame): 预处理后的数据
+            include_weather (bool): 是否包含天气特征
         
-        # 创建滞后特征（前一个时间点的速度）
+        Returns:
+            pd.DataFrame: 包含新特征的数据框
+        """
+        # 确保数据按时间排序
+        df = df.sort_index()
+        
+        # 创建时间特征
+        df['hour'] = df.index.hour
+        df['day_of_week'] = df.index.dayofweek
+        df['month'] = df.index.month
+        
+        # 创建滞后特征
         df['speed_lag1'] = df['avg_speed'].shift(1)
+        df['speed_lag2'] = df['avg_speed'].shift(2)
+        df['speed_lag3'] = df['avg_speed'].shift(3)
         
         # 创建移动平均特征
         df['speed_ma5'] = df['avg_speed'].rolling(window=5).mean()
         df['speed_ma10'] = df['avg_speed'].rolling(window=10).mean()
         
-        # 创建时间特征
-        df['is_rush_hour'] = df['hour'].apply(
-            lambda x: 1 if (x >= 7 and x <= 9) or (x >= 16 and x <= 18) else 0
-        )
-        df['is_weekend'] = df['dayofweek'].apply(lambda x: 1 if x >= 5 else 0)
-        
-        # 删除创建特征过程中产生的缺失值
+        # 移除包含NaN的行
         df = df.dropna()
         
-        logging.info("特征工程完成")
         return df
         
     def split_data(self, df, target_col='avg_speed'):
         """划分数据集"""
         logging.info("开始划分数据集...")
         
-        # 对数据进行采样，减少数据量
-        if len(df) > 50000:
-            df = df.sample(n=50000, random_state=RANDOM_STATE)
-        
-        # 计算划分点
-        n = len(df)
-        train_size = int(n * TRAIN_RATIO)
-        val_size = int(n * VAL_RATIO)
+        # 移除数据量限制，使用全部数据
+        # 使用时间序列分割
+        train_size = int(len(df) * TRAIN_RATIO)
+        val_size = int(len(df) * VAL_RATIO)
         
         # 分离特征和目标变量
-        feature_cols = [col for col in df.columns if col != target_col]
-        X = df[feature_cols].copy()  # 使用.copy()避免SettingWithCopyWarning
-        y = df[target_col].copy()
+        y = df[target_col].values
+        X = df.drop(columns=[target_col])
         
-        # 按时间顺序划分数据集
-        X_train = X[:train_size].copy()
-        y_train = y[:train_size].copy()
+        # 快速分割
+        X_train = X[:train_size]
+        y_train = y[:train_size]
+        X_val = X[train_size:train_size + val_size]
+        y_val = y[train_size:train_size + val_size]
+        X_test = X[train_size + val_size:]
+        y_test = y[train_size + val_size:]
         
-        X_val = X[train_size:train_size + val_size].copy()
-        y_val = y[train_size:train_size + val_size].copy()
-        
-        X_test = X[train_size + val_size:].copy()
-        y_test = y[train_size + val_size:].copy()
-        
-        # 标准化特征
-        numeric_features = X_train.select_dtypes(include=['float64', 'int64']).columns
-        X_train[numeric_features] = self.scaler.fit_transform(X_train[numeric_features])
-        X_val[numeric_features] = self.scaler.transform(X_val[numeric_features])
-        X_test[numeric_features] = self.scaler.transform(X_test[numeric_features])
-        
-        logging.info(f"数据集划分完成:")
-        logging.info(f"训练集大小: {len(X_train)}")
-        logging.info(f"验证集大小: {len(X_val)}")
-        logging.info(f"测试集大小: {len(X_test)}")
+        # 使用更快的标准化方法
+        self.scaler.fit(X_train)
+        X_train = pd.DataFrame(self.scaler.transform(X_train), columns=X.columns, index=X_train.index)
+        X_val = pd.DataFrame(self.scaler.transform(X_val), columns=X.columns, index=X_val.index)
+        X_test = pd.DataFrame(self.scaler.transform(X_test), columns=X.columns, index=X_test.index)
         
         return X_train, X_val, X_test, y_train, y_val, y_test
         
-    def prepare_baseline_data(self, traffic_data):
-        """准备基础实验数据"""
-        logging.info("准备基础实验数据...")
-        logging.info("开始处理交通数据...")
+    def prepare_data(self, traffic_data, weather_data=None):
+        """准备实验数据
         
-        # 使用tqdm包装迭代过程
-        for col in tqdm(traffic_data.columns, desc="处理交通数据特征"):
-            # 处理每列数据
-            ...
+        Args:
+            traffic_data (pd.DataFrame): 交通数据
+            weather_data (pd.DataFrame, optional): 天气数据
+            
+        Returns:
+            pd.DataFrame: 处理后的数据集
+        """
+        logging.info("准备实验数据...")
+        processed_traffic = self.process_traffic_data(traffic_data)
         
-        # 处理交通数据
-        processed_df = self.process_traffic_data(traffic_data)
+        if weather_data is not None:
+            processed_weather = self.process_weather_data(weather_data)
+            merged_df = self.align_and_merge_data(processed_traffic, processed_weather)
+            return self.create_features(merged_df, include_weather=True)
         
-        # 创建基础特征
-        baseline_df = self.create_baseline_features(processed_df)
-        
-        return baseline_df
-        
-    def prepare_enhanced_data(self, traffic_df, weather_df):
-        """准备增强实验数据（使用交通+天气数据）"""
-        logging.info("准备增强实验数据...")
-        
-        # 处理两种数据
-        processed_traffic = self.process_traffic_data(traffic_df)
-        processed_weather = self.process_weather_data(weather_df)
-        
-        # 合并数据
-        merged_df = self.align_and_merge_data(processed_traffic, processed_weather)
-        
-        # 创建增强特征
-        enhanced_df = self.create_features(merged_df)
-        
-        return enhanced_df
-        
-    def create_baseline_features(self, df):
-        """创建基础特征（仅使用交通数据）"""
-        logging.info("开始基础特征工程...")
-        
-        # 仅创建基于交通数据的特征
-        df['speed_lag1'] = df['avg_speed'].shift(1)
-        df['speed_ma5'] = df['avg_speed'].rolling(window=5).mean()
-        df['speed_ma10'] = df['avg_speed'].rolling(window=10).mean()
-        df['is_rush_hour'] = df['hour'].apply(
-            lambda x: 1 if (x >= 7 and x <= 9) or (x >= 16 and x <= 18) else 0
-        )
-        df['is_weekend'] = df['dayofweek'].apply(lambda x: 1 if x >= 5 else 0)
-        
-        df = df.dropna()
-        return df
+        return self.create_features(processed_traffic, include_weather=False)

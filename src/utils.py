@@ -6,7 +6,7 @@ def create_directories():
     directories = [
         PROCESSED_DATA_DIR,
         os.path.join(RESULTS_DIR, 'metrics'),
-        os.path.join(RESULTS_DIR, 'feature_importance')
+        os.path.join(RESULTS_DIR, 'figures')
     ]
     
     for directory in directories:
