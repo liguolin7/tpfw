@@ -36,8 +36,8 @@ MODELS = {
         'params': {
             'units': [50, 30],
             'batch_size': 32,
-            'epochs': 1,
-            'patience': 1
+            'epochs': 50,
+            'patience': 5
         }
     }
 }

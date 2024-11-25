@@ -95,7 +95,7 @@ class BaselineModels:
         logging.info(f"创建LSTM模型，输入形状: {input_shape}")
         self.lstm_model.summary()
         
-    def train_lstm(self, X_train, y_train, X_val, y_val, epochs=1, batch_size=32):
+    def train_lstm(self, X_train, y_train, X_val, y_val, epochs=50, batch_size=32):
         """训练LSTM模型"""
         if self.lstm_model is None:
             raise ValueError("LSTM模型未创建，请先调用create_lstm_model")
