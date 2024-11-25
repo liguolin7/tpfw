@@ -22,13 +22,13 @@ RANDOM_SEED = 42
 
 # 训练配置
 TRAINING_CONFIG = {
-    'batch_size': 256,
-    'epochs': 1,
+    'batch_size': 128,
+    'epochs': 100,
     'verbose': 1,
     'callbacks': [
         tf.keras.callbacks.EarlyStopping(
             monitor='val_loss',
-            patience=15,
+            patience=5,
             restore_best_weights=True
         ),
         tf.keras.callbacks.ReduceLROnPlateau(
@@ -83,3 +83,6 @@ VISUALIZATION_CONFIG = {
     'color_palette': 'Set2',
     'dpi': 300
 }
+
+# 数据处理参数验证
+assert abs(TRAIN_RATIO + VAL_RATIO + TEST_RATIO - 1.0) < 1e-10, "数据集划分比例之和必须等于1"
