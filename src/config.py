@@ -22,20 +22,25 @@ RANDOM_SEED = 42
 
 # 训练配置
 TRAINING_CONFIG = {
-    'batch_size': 128,
-    'epochs': 100,
+    'batch_size': 32,
+    'epochs': 200,
     'verbose': 1,
     'callbacks': [
         tf.keras.callbacks.EarlyStopping(
             monitor='val_loss',
-            patience=5,
+            patience=15,
             restore_best_weights=True
         ),
         tf.keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
-            factor=0.2,
-            patience=8,
+            factor=0.5,
+            patience=5,
             min_lr=1e-6
+        ),
+        tf.keras.callbacks.ModelCheckpoint(
+            'best_model.h5',
+            save_best_only=True,
+            monitor='val_loss'
         )
     ]
 }
@@ -43,33 +48,33 @@ TRAINING_CONFIG = {
 # 模型配置
 MODEL_CONFIG = {
     'LSTM': {
-        'units': [128, 64],
-        'dropout': 0.3,
-        'l2_regularization': 1e-5,
+        'units': [256, 128, 64],
+        'dropout': 0.2,
+        'l2_regularization': 1e-6,
         'optimizer': legacy_optimizers.Adam,
-        'learning_rate': 0.001,
-        'loss': 'mse',
-        'metrics': ['mae']
+        'learning_rate': 1e-3,
+        'loss': 'huber',
+        'metrics': ['mae', 'mse']
     },
     'GRU': {
-        'units': [128, 64],
-        'dropout': 0.3,
-        'l2_regularization': 1e-5,
+        'units': [256, 128, 64],
+        'dropout': 0.2,
+        'l2_regularization': 1e-6,
         'optimizer': legacy_optimizers.Adam,
-        'learning_rate': 0.001,
-        'loss': 'mse',
-        'metrics': ['mae']
+        'learning_rate': 1e-3,
+        'loss': 'huber',
+        'metrics': ['mae', 'mse']
     },
     'CNN_LSTM': {
-        'cnn_filters': [64, 32],
+        'cnn_filters': [128, 64],
         'cnn_kernel_size': 3,
-        'lstm_units': [64, 32],
-        'dropout': 0.3,
-        'l2_regularization': 1e-5,
+        'lstm_units': [128, 64],
+        'dropout': 0.2,
+        'l2_regularization': 1e-6,
         'optimizer': legacy_optimizers.Adam,
-        'learning_rate': 0.001,
-        'loss': 'mse',
-        'metrics': ['mae']
+        'learning_rate': 1e-3,
+        'loss': 'huber',
+        'metrics': ['mae', 'mse']
     }
 }
 

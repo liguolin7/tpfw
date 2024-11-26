@@ -261,102 +261,143 @@ class BaselineModels:
     
     def _build_lstm_model(self, input_shape):
         """构建LSTM模型"""
-        try:
-            config = MODEL_CONFIG['LSTM']
+        config = MODEL_CONFIG['LSTM']
+        
+        model = Sequential([
+            # 第一层LSTM
+            LSTM(config['units'][0], 
+                return_sequences=True,
+                input_shape=input_shape,
+                kernel_regularizer=l2(config['l2_regularization'])),
+            BatchNormalization(),
+            Dropout(config['dropout']),
             
-            model = Sequential([
-                LSTM(
-                    units=config['units'][0],
-                    input_shape=input_shape,
-                    kernel_regularizer=l2(config['l2_regularization']),
-                    kernel_initializer=tf.keras.initializers.GlorotUniform(seed=RANDOM_SEED)
-                ),
-                Dropout(config['dropout']),
-                BatchNormalization(),
-                Dense(1)
-            ])
+            # 第二层LSTM
+            LSTM(config['units'][1], 
+                return_sequences=True,
+                kernel_regularizer=l2(config['l2_regularization'])),
+            BatchNormalization(),
+            Dropout(config['dropout']),
             
-            optimizer = legacy_optimizers.Adam(learning_rate=config['learning_rate'])
-            model.compile(
-                optimizer=optimizer,
-                loss=config['loss'],
-                metrics=config['metrics']
-            )
+            # 第三层LSTM
+            LSTM(config['units'][2]),
+            BatchNormalization(),
+            Dropout(config['dropout']),
             
-            return model
-            
-        except Exception as e:
-            logging.error(f"创建LSTM模型时出错: {str(e)}")
-            raise
+            Dense(32, activation='relu'),
+            BatchNormalization(),
+            Dense(1)
+        ])
+        
+        optimizer = legacy_optimizers.Adam(
+            learning_rate=config['learning_rate'],
+            clipnorm=1.0
+        )
+        
+        model.compile(
+            optimizer=optimizer,
+            loss=config['loss'],
+            metrics=config['metrics']
+        )
+        
+        return model
     
     def _build_gru_model(self, input_shape):
         """构建GRU模型"""
-        try:
-            config = MODEL_CONFIG['GRU']
+        config = MODEL_CONFIG['GRU']
+        
+        model = Sequential([
+            # 第一层GRU
+            GRU(config['units'][0], 
+                return_sequences=True,
+                input_shape=input_shape,
+                kernel_regularizer=l2(config['l2_regularization'])),
+            BatchNormalization(),
+            Dropout(config['dropout']),
             
-            model = Sequential([
-                GRU(
-                    units=config['units'][0],
-                    input_shape=input_shape,
-                    kernel_regularizer=l2(config['l2_regularization']),
-                    kernel_initializer=tf.keras.initializers.GlorotUniform(seed=RANDOM_SEED)
-                ),
-                Dropout(config['dropout']),
-                BatchNormalization(),
-                Dense(1)
-            ])
+            # 第二层GRU
+            GRU(config['units'][1], 
+                return_sequences=True,
+                kernel_regularizer=l2(config['l2_regularization'])),
+            BatchNormalization(),
+            Dropout(config['dropout']),
             
-            optimizer = legacy_optimizers.Adam(learning_rate=config['learning_rate'])
-            model.compile(
-                optimizer=optimizer,
-                loss=config['loss'],
-                metrics=config['metrics']
-            )
+            # 第三层GRU
+            GRU(config['units'][2]),
+            BatchNormalization(),
+            Dropout(config['dropout']),
             
-            return model
-            
-        except Exception as e:
-            logging.error(f"创建GRU模型时出错: {str(e)}")
-            raise
+            Dense(32, activation='relu'),
+            BatchNormalization(),
+            Dense(1)
+        ])
+        
+        optimizer = legacy_optimizers.Adam(
+            learning_rate=config['learning_rate'],
+            clipnorm=1.0
+        )
+        
+        model.compile(
+            optimizer=optimizer,
+            loss=config['loss'],
+            metrics=config['metrics']
+        )
+        
+        return model
     
     def _build_cnn_lstm_model(self, input_shape):
         """构建CNN-LSTM模型"""
-        try:
-            config = MODEL_CONFIG['CNN_LSTM']
+        config = MODEL_CONFIG['CNN_LSTM']
+        
+        model = Sequential([
+            # CNN层
+            Conv1D(
+                filters=config['cnn_filters'][0],
+                kernel_size=config['cnn_kernel_size'],
+                activation='relu',
+                input_shape=input_shape,
+                kernel_regularizer=l2(config['l2_regularization'])
+            ),
+            BatchNormalization(),
+            MaxPooling1D(pool_size=2),
             
-            model = Sequential([
-                Conv1D(
-                    filters=config['cnn_filters'][0],
-                    kernel_size=config['cnn_kernel_size'],
-                    activation='relu',
-                    input_shape=input_shape,
-                    kernel_initializer=tf.keras.initializers.GlorotUniform(seed=RANDOM_SEED)
-                ),
-                MaxPooling1D(pool_size=2),
-                BatchNormalization(),
-                
-                LSTM(
-                    units=config['lstm_units'][0],
-                    kernel_regularizer=l2(config['l2_regularization']),
-                    kernel_initializer=tf.keras.initializers.GlorotUniform(seed=RANDOM_SEED)
-                ),
-                Dropout(config['dropout']),
-                BatchNormalization(),
-                Dense(1)
-            ])
+            Conv1D(
+                filters=config['cnn_filters'][1],
+                kernel_size=config['cnn_kernel_size'],
+                activation='relu',
+                kernel_regularizer=l2(config['l2_regularization'])
+            ),
+            BatchNormalization(),
+            MaxPooling1D(pool_size=2),
             
-            optimizer = legacy_optimizers.Adam(learning_rate=config['learning_rate'])
-            model.compile(
-                optimizer=optimizer,
-                loss=config['loss'],
-                metrics=config['metrics']
-            )
+            # LSTM层
+            LSTM(config['lstm_units'][0], 
+                return_sequences=True,
+                kernel_regularizer=l2(config['l2_regularization'])),
+            BatchNormalization(),
+            Dropout(config['dropout']),
             
-            return model
+            LSTM(config['lstm_units'][1]),
+            BatchNormalization(),
+            Dropout(config['dropout']),
             
-        except Exception as e:
-            logging.error(f"创建CNN-LSTM模型时出错: {str(e)}")
-            raise
+            Dense(32, activation='relu'),
+            BatchNormalization(),
+            Dense(1)
+        ])
+        
+        optimizer = legacy_optimizers.Adam(
+            learning_rate=config['learning_rate'],
+            clipnorm=1.0
+        )
+        
+        model.compile(
+            optimizer=optimizer,
+            loss=config['loss'],
+            metrics=config['metrics']
+        )
+        
+        return model
 
 class LSTMHyperModel(HyperModel):
     def __init__(self, input_shape):
