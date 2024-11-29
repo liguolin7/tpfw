@@ -76,25 +76,9 @@ class BaselineModels:
         config = MODEL_CONFIG['LSTM']
         
         model = Sequential([
-            LSTM(config['units'][0], 
-                return_sequences=True,
-                input_shape=input_shape,
-                kernel_regularizer=l2(config['l2_regularization'])),
-            BatchNormalization(),
-            Dropout(config['dropout']),
-            
-            LSTM(config['units'][1], 
-                return_sequences=True,
-                kernel_regularizer=l2(config['l2_regularization'])),
-            BatchNormalization(),
-            Dropout(config['dropout']),
-            
-            LSTM(config['units'][2]),
-            BatchNormalization(),
-            Dropout(config['dropout']),
-            
-            Dense(32, activation='relu'),
-            BatchNormalization(),
+            LSTM(config['units'][0], return_sequences=True, input_shape=input_shape),
+            LSTM(config['units'][1], return_sequences=True),
+            LSTM(config['units'][-1]),
             Dense(1)
         ])
         
@@ -124,12 +108,8 @@ class BaselineModels:
             Dropout(config['dropout']),
             
             GRU(config['units'][1], 
-                return_sequences=True,
+                return_sequences=False,
                 kernel_regularizer=l2(config['l2_regularization'])),
-            BatchNormalization(),
-            Dropout(config['dropout']),
-            
-            GRU(config['units'][2]),
             BatchNormalization(),
             Dropout(config['dropout']),
             

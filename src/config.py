@@ -22,19 +22,19 @@ RANDOM_SEED = 42
 
 # 训练配置
 TRAINING_CONFIG = {
-    'batch_size': 32,
-    'epochs': 200,
+    'batch_size': 64,
+    'epochs': 1,
     'verbose': 1,
     'callbacks': [
         tf.keras.callbacks.EarlyStopping(
             monitor='val_loss',
-            patience=15,
+            patience=10,
             restore_best_weights=True
         ),
         tf.keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
             factor=0.5,
-            patience=5,
+            patience=3,
             min_lr=1e-6
         ),
         tf.keras.callbacks.ModelCheckpoint(
@@ -48,31 +48,40 @@ TRAINING_CONFIG = {
 # 模型配置
 MODEL_CONFIG = {
     'LSTM': {
-        'units': [256, 128, 64],
+        'units': [128, 64],
         'dropout': 0.2,
         'l2_regularization': 1e-6,
         'optimizer': legacy_optimizers.Adam,
-        'learning_rate': 1e-3,
+        'learning_rate': 2e-3,
         'loss': 'huber',
         'metrics': ['mae', 'mse']
     },
     'GRU': {
-        'units': [256, 128, 64],
+        'units': [128, 64],
         'dropout': 0.2,
         'l2_regularization': 1e-6,
         'optimizer': legacy_optimizers.Adam,
-        'learning_rate': 1e-3,
+        'learning_rate': 2e-3,
         'loss': 'huber',
         'metrics': ['mae', 'mse']
     },
     'CNN_LSTM': {
-        'cnn_filters': [128, 64],
+        'cnn_filters': [64, 32],
         'cnn_kernel_size': 3,
-        'lstm_units': [128, 64],
+        'lstm_units': [64, 32],
         'dropout': 0.2,
         'l2_regularization': 1e-6,
         'optimizer': legacy_optimizers.Adam,
-        'learning_rate': 1e-3,
+        'learning_rate': 2e-3,
+        'loss': 'huber',
+        'metrics': ['mae', 'mse']
+    },
+    'lstm': {
+        'units': [64, 32, 16],
+        'dropout': 0.2,
+        'l2_regularization': 1e-6,
+        'optimizer': legacy_optimizers.Adam,
+        'learning_rate': 2e-3,
         'loss': 'huber',
         'metrics': ['mae', 'mse']
     }
