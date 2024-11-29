@@ -1,364 +1,242 @@
-from data_loader import *
-from data_processor import DataProcessor
-from models import BaselineModels
-from evaluation import *
+import os
 import logging
 import pandas as pd
-import os
+from datetime import datetime
 import numpy as np
-from tqdm import tqdm
-import shap
-from sklearn.model_selection import KFold
-import tensorflow as tf
-from config import PROCESSED_DATA_DIR, RESULTS_DIR, RANDOM_SEED
-import random
-import datetime
-from evaluation import plot_training_history, shap_analysis
+from data_loader import load_traffic_data, load_weather_data
+from data_processor import DataProcessor
+from models import BaselineModels, EnhancedModels
+from evaluation import evaluate_models, calculate_improvements
+from visualization import DataVisualizer
+from config import RESULTS_DIR
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
-# 固定随机种子
-RANDOM_SEED = 42
-os.environ['PYTHONHASHSEED'] = str(RANDOM_SEED)
-random.seed(RANDOM_SEED)
-np.random.seed(RANDOM_SEED)
-tf.random.set_seed(RANDOM_SEED)
+def create_results_directory():
+    """创建结果目录并返回路径"""
+    # 使用当前时间戳创建目录名
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    
+    # 创建基础实验结果目录
+    baseline_dir = os.path.join(RESULTS_DIR, f'baseline_results_{timestamp}')
+    os.makedirs(baseline_dir, exist_ok=True)
+    
+    # 创建增强实验结果目录
+    enhanced_dir = os.path.join(RESULTS_DIR, f'enhanced_results_{timestamp}')
+    os.makedirs(enhanced_dir, exist_ok=True)
+    
+    # 创建图表目录
+    figures_dir = os.path.join(RESULTS_DIR, 'figures')
+    os.makedirs(figures_dir, exist_ok=True)
+    
+    return baseline_dir, enhanced_dir, figures_dir
 
-def setup_logging():
-    """设置日志配置"""
-    # 创建必要的目录
-    log_dir = 'logs'
-    results_dir = 'results/experiment_outputs'
-    os.makedirs(log_dir, exist_ok=True)
-    os.makedirs(results_dir, exist_ok=True)
-    
-    # 设置日志格式
-    formatter = logging.Formatter('%(asctime)s | %(message)s', datefmt='%H:%M:%S')
-    
-    # 配置处理器
-    handlers = [
-        logging.FileHandler(os.path.join(log_dir, 'experiment.log'), mode='w', encoding='utf-8'),
-        logging.FileHandler(os.path.join(results_dir, 'experiment_output.txt'), mode='w', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-    
-    # 配置根日志记录器
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s | %(message)s',
-        datefmt='%H:%M:%S',
-        handlers=handlers
-    )
-    
-    # 设置所有第三方库的日志级别为 ERROR
-    for logger_name in logging.root.manager.loggerDict:
-        if logger_name.startswith(('tensorflow', 'numpy', 'matplotlib', 'keras')):
-            logging.getLogger(logger_name).setLevel(logging.ERROR)
-    
-    # 过滤掉优化器警告
-    import warnings
-    warnings.filterwarnings('ignore', category=UserWarning, module='keras')
-
-def create_directories():
+def setup_directories():
     """创建必要的目录结构"""
     directories = [
-        PROCESSED_DATA_DIR
+        os.path.join(RESULTS_DIR, 'experiment_outputs'),
+        os.path.join(RESULTS_DIR, 'figures'),
+        os.path.join(RESULTS_DIR, 'figures', 'traffic'),
+        os.path.join(RESULTS_DIR, 'figures', 'weather'),
+        os.path.join(RESULTS_DIR, 'figures', 'models'),
+        os.path.join(RESULTS_DIR, 'figures', 'comparison')
     ]
     
     for directory in directories:
-        if not os.path.exists(directory):
-            os.makedirs(directory)
+        os.makedirs(directory, exist_ok=True)
 
-def train_and_evaluate_models(
-    X_train, y_train,
-    X_val, y_val,
-    X_test, y_test,
-    experiment_name,
-    results_dir
-):
-    """训练和评估模型"""
-    logging.info(f"\n{'='*50}")
-    logging.info(f"开始 {experiment_name} 实验")
-    logging.info(f"{'='*50}")
+def run_experiment():
+    """运行实验并生成可视化"""
+    # 设置日志格式
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s | %(message)s',
+        datefmt='%H:%M:%S'
+    )
     
-    models = BaselineModels()
-    results = {}
-    best_model = None
-    best_score = float('-inf')
+    # 创建目录结构
+    setup_directories()
+    baseline_dir, enhanced_dir, figures_dir = create_results_directory()
     
-    # 模型配置
-    model_configs = [
-        ('LSTM', (models.train_lstm, lambda x: models.predict('lstm', x))),
-        ('GRU', (models.train_gru, lambda x: models.predict('gru', x))),
-        ('CNN_LSTM', (models.train_cnn_lstm, lambda x: models.predict('cnn_lstm', x)))
-    ]
+    # 创建可视化器
+    visualizer = DataVisualizer()
     
-    for model_name, (train_func, predict_func) in model_configs:
-        logging.info(f"\n{'-'*20} {model_name} 模型训练 {'-'*20}")
-        
-        # 重塑数据
-        X_train_reshaped = X_train.values.reshape((X_train.shape[0], X_train.shape[1], 1))
-        X_val_reshaped = X_val.values.reshape((X_val.shape[0], X_val.shape[1], 1))
-        X_test_reshaped = X_test.values.reshape((X_test.shape[0], X_test.shape[1], 1))
-        
-        # 训练模型
-        history = train_func(X_train_reshaped, y_train, X_val_reshaped, y_val)
-        
-        # 保存训练历史
-        plot_training_history(history, model_name, results_dir)
-        
-        # 预测和评估
-        y_pred = predict_func(X_test_reshaped).flatten()
-        model_results = evaluate_model(y_test, y_pred, model_name)
-        results[model_name] = model_results
-        
-        # 更新最佳模型
-        if model_results['r2'] > best_score:
-            best_score = model_results['r2']
-            best_model = models.get_model(model_name.lower())
-        
-        # 绘制预测结果
-        plot_predictions(y_test, y_pred, model_name, results_dir)
-    
-    return results, best_model
-
-def run_experiments():
-    """运行所有实验"""
-    try:
-        # 加载数据
-        traffic_data = load_traffic_data()
-        weather_data = load_weather_data()
-        
-        # 创建数据处理器
-        processor = DataProcessor()
-        
-        # 准备基准实验数据
-        baseline_data = {
-            'traffic_data': traffic_data,
-            'weather_data': None
-        }
-        
-        # 准备增强实验数据
-        enhanced_data = {
-            'traffic_data': traffic_data,
-            'weather_data': weather_data
-        }
-        
-        logging.info("数据预处理...")
-        
-        # 运行基准实验和增强实验
-        baseline_results, baseline_model = run_single_experiment(processor, baseline_data, 'baseline')
-        enhanced_results, enhanced_model = run_single_experiment(processor, enhanced_data, 'enhanced')
-        
-        # 计算改进
-        improvements = calculate_improvements(baseline_results, enhanced_results)
-        
-        return baseline_results, enhanced_results, improvements
-        
-    except Exception as e:
-        logging.error(f"实验程中出现错误: {str(e)}")
-        raise
-
-def calculate_improvements(baseline_results, enhanced_results):
-    """计算模型性能提升"""
-    improvements = {}
-    metrics = ['rmse', 'mae', 'r2', 'mape']
-    
-    for model in baseline_results.keys():
-        improvements[model] = {}
-        for metric in metrics:
-            baseline = baseline_results[model][metric]
-            enhanced = enhanced_results[model][metric]
-            
-            if metric == 'r2':
-                # R2提升百分比
-                improvement = (enhanced - baseline) / abs(baseline) * 100
-            else:
-                # RMSE和MAE降低百分比
-                improvement = (baseline - enhanced) / baseline * 100
-                
-            improvements[model][f'{metric}_improvement'] = improvement
-    
-    return improvements
-
-def main():
-    """主函数"""
-    # 配置日志和硬件
-    setup_logging()
-    configure_hardware()
+    # 创建数据处理器
+    data_processor = DataProcessor()
     
     # 加载数据
     traffic_data = load_traffic_data()
     weather_data = load_weather_data()
     
-    # 创建数据处理器
-    processor = DataProcessor()
+    # 生成初始数据分析可视化
+    logging.info("生成数据分析可视化...")
+    visualizer.plot_traffic_patterns(
+        traffic_data,
+        save_path=os.path.join(figures_dir, 'traffic')
+    )
     
-    # 运行实验
-    baseline_results, enhanced_results, improvements = run_experiments()
+    visualizer.plot_weather_impact(
+        weather_data,
+        traffic_data,
+        save_path=os.path.join(figures_dir, 'weather')
+    )
     
-    # 准备特征名称
-    traffic_features = list(traffic_data.columns)
-    weather_features = list(weather_data.columns) if weather_data is not None else []
-    all_features = traffic_features + weather_features
+    # 数据预处理
+    logging.info("数据预处理...")
+    # 使用DataProcessor类的方法处理数据
+    X_train, y_train, X_val, y_val, X_test, y_test = data_processor.prepare_sequences(traffic_data, weather_data)
     
-    # 创建结果目录
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    final_results_dir = os.path.join(RESULTS_DIR, f'final_results_{timestamp}')
-    figures_dir = os.path.join(final_results_dir, 'figures')
-    os.makedirs(figures_dir, exist_ok=True)
+    # 基准实验
+    logging.info("\n==================================================")
+    logging.info("开始 baseline 实验")
+    logging.info("==================================================")
     
-    # 绘制季节性分析
-    plot_seasonal_analysis(traffic_data, weather_data, final_results_dir)
+    baseline_models = BaselineModels()
+    baseline_histories = {}
+    baseline_predictions = {}
     
-    # 绘制模型对比图
-    plot_model_comparison(baseline_results, enhanced_results, final_results_dir)
+    for model_name in ['LSTM', 'GRU', 'CNN_LSTM']:
+        logging.info(f"\n训练 {model_name} 模型...")
+        model, history = baseline_models.train_model(model_name, X_train, y_train, X_val, y_val)
+        baseline_histories[model_name] = history
+        predictions = model.predict(X_test)
+        baseline_predictions[model_name] = predictions.flatten()  # 确保预测结果是1D数组
+        
+        # 立即评估并打印结果
+        metrics = {
+            'rmse': np.sqrt(mean_squared_error(y_test, predictions)),
+            'mae': mean_absolute_error(y_test, predictions),
+            'r2': r2_score(y_test, predictions),
+            'mape': np.mean(np.abs((y_test - predictions) / y_test)) * 100
+        }
+        logging.info(f"\n{model_name} 模型评估结果:")
+        for metric_name, value in metrics.items():
+            logging.info(f"{metric_name}: {value:.4f}")
     
-    # 打印实验总结
-    print_experiment_summary(baseline_results, enhanced_results, improvements)
+    # 增强实验
+    logging.info("\n==================================================")
+    logging.info("开始 enhanced 实验")
+    logging.info("==================================================")
+    
+    enhanced_models = EnhancedModels()
+    enhanced_histories = {}
+    enhanced_predictions = {}
+    
+    for model_name in ['LSTM', 'GRU', 'CNN_LSTM']:
+        logging.info(f"\n训练 {model_name} 模型...")
+        model, history = enhanced_models.train_model(model_name, X_train, y_train, X_val, y_val)
+        enhanced_histories[model_name] = history
+        predictions = model.predict(X_test)
+        enhanced_predictions[model_name] = predictions.flatten()  # 确保预测结果是1D数组
+        
+        # 立即评估并打印结果
+        metrics = {
+            'rmse': np.sqrt(mean_squared_error(y_test, predictions)),
+            'mae': mean_absolute_error(y_test, predictions),
+            'r2': r2_score(y_test, predictions),
+            'mape': np.mean(np.abs((y_test - predictions) / y_test)) * 100
+        }
+        logging.info(f"\n{model_name} 模型评估结果:")
+        for metric_name, value in metrics.items():
+            logging.info(f"{metric_name}: {value:.4f}")
+    
+    # 生成模型训练过程可视化
+    logging.info("\n生成模型训练过程可视化...")
+    visualizer.plot_model_performance(
+        baseline_histories,
+        save_path=os.path.join(figures_dir, 'models', 'baseline')
+    )
+    
+    visualizer.plot_model_performance(
+        enhanced_histories,
+        save_path=os.path.join(figures_dir, 'models', 'enhanced')
+    )
+    
+    # 确保y_test也是1D数组
+    y_test_flat = y_test.flatten() if isinstance(y_test, np.ndarray) else y_test.values
+    
+    # 生成预测结果对比可视化
+    logging.info("\n生成预测结果对比可视化...")
+    visualizer.plot_prediction_comparison(
+        y_test_flat,
+        baseline_predictions,
+        save_path=os.path.join(figures_dir, 'comparison', 'baseline')
+    )
+    
+    visualizer.plot_prediction_comparison(
+        y_test_flat,
+        enhanced_predictions,
+        save_path=os.path.join(figures_dir, 'comparison', 'enhanced')
+    )
+    
+    # 评估模型并生成性能对比可视化
+    baseline_metrics = evaluate_models(baseline_predictions, y_test_flat)
+    enhanced_metrics = evaluate_models(enhanced_predictions, y_test_flat)
+    
+    # 计算性能提升
+    improvements = calculate_improvements(baseline_metrics, enhanced_metrics)
+    
+    visualizer.plot_model_comparison(
+        baseline_metrics,
+        save_path=os.path.join(figures_dir, 'comparison', 'baseline_metrics')
+    )
+    
+    visualizer.plot_model_comparison(
+        enhanced_metrics,
+        save_path=os.path.join(figures_dir, 'comparison', 'enhanced_metrics')
+    )
+    
+    # 在评估完所有模型后，添加基准模型和增强模型的对比可视化
+    visualizer.plot_model_improvements(
+        baseline_metrics=baseline_metrics,
+        enhanced_metrics=enhanced_metrics,
+        save_path='results/figures'
+    )
+    
+    logging.info("\n实验完成，所有可视化内容已保存到results/figures目录")
+    
+    return baseline_metrics, enhanced_metrics, improvements
 
-def run_single_experiment(processor, data, experiment_type):
-    """运行单个实验"""
+def main():
     try:
-        # 创建实验目录
-        results_dir = create_experiment_directories(experiment_type)
-        
-        # 数据准备
-        X_train, X_val, X_test, y_train, y_val, y_test = processor.prepare_sequences(
-            data['traffic_data'], 
-            data['weather_data']
-        )
-        
-        logging.info(f"\n{'='*50}")
-        logging.info(f"开始 {experiment_type} 实验")
-        logging.info("="*50)
-        
-        # 打印数据集大小
-        logging.info("数据集大小:")
-        logging.info(f"训练集: {X_train.shape}")
-        logging.info(f"验证集: {X_val.shape}")
-        logging.info(f"测试集: {X_test.shape}")
-        
-        # 训练和评估模型
-        results, best_model = train_and_evaluate_models(
-            X_train=X_train, 
-            y_train=y_train,
-            X_val=X_val, 
-            y_val=y_val,
-            X_test=X_test, 
-            y_test=y_test,
-            experiment_name=experiment_type,
-            results_dir=results_dir
-        )
-        
-        return results, best_model
-        
+        baseline_metrics, enhanced_metrics, improvements = run_experiment()
+        logging.info("实验成功完成")
     except Exception as e:
         logging.error(f"实验过程中出现错误: {str(e)}")
-        raise
+        raise 
+    
+    # 在评估完所有模型后，添加新的可视化内容
+    
+    # 1. 预测结果可视化（以CNN-LSTM为例）
+    visualizer.plot_prediction_vs_actual(
+        y_true=y_test[:100],  # 展示前100个时间步的预测结果
+        y_pred=best_model_predictions[:100],
+        timestamps=test_timestamps[:100],
+        model_name='CNN_LSTM',
+        save_path='results/figures'
+    )
+    
+    # 2. 特征重要性分析
+    if hasattr(best_model, 'feature_importance_'):
+        visualizer.plot_feature_importance(
+            feature_importance=best_model.feature_importance_,
+            feature_names=feature_names,
+            save_path='results/figures'
+        )
+    
+    # 3. 预测误差分布
+    visualizer.plot_error_distribution(
+        y_true=y_test,
+        y_pred=best_model_predictions,
+        model_name='CNN_LSTM',
+        save_path='results/figures'
+    )
+    
+    # 4. 创建演示总结
+    visualizer.create_presentation_summary(
+        baseline_metrics=baseline_metrics,
+        enhanced_metrics=enhanced_metrics,
+        save_path='results/figures'
+    )
 
-def save_experiment_results(baseline_results, enhanced_results, improvements):
-    """保存实验结果和对比分析"""
-    # 获取当前时间戳
-    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    
-    # 创建结果目录，包含时间戳
-    results_dir = os.path.join(RESULTS_DIR, f'comparison_{timestamp}')
-    os.makedirs(results_dir, exist_ok=True)
-    
-    # 准备对比结果数据
-    comparison_data = []
-    
-    for model in improvements.keys():
-        for metric in ['rmse', 'mae', 'r2', 'mape']:
-            comparison_data.append({
-                'Model': model,
-                'Metric': metric,
-                'Baseline': baseline_results[model][metric],
-                'Enhanced': enhanced_results[model][metric],
-                'Improvement(%)': improvements[model][f'{metric}_improvement']
-            })
-    
-    # 创建 DataFrame
-    comparison_df = pd.DataFrame(comparison_data)
-    
-    # 保存结果，文件名包含时间戳
-    comparison_df.to_csv(os.path.join(results_dir, f'model_comparison_{timestamp}.csv'), index=False)
-    logging.info("实验结果已保存")
-    
-    # 绘制对比图，传递 results_dir
-    plot_model_comparison(baseline_results, enhanced_results, results_dir)
-
-def find_best_model(improvements):
-    """找出性能提升最好的模型"""
-    avg_improvements = {}
-    for model, metrics in improvements.items():
-        avg_improvements[model] = np.mean([v for v in metrics.values()])
-    
-    return max(avg_improvements.items(), key=lambda x: x[1])[0]
-
-def calculate_average_improvement(model_improvements):
-    """计算平均性能提升"""
-    return np.mean([v for v in model_improvements.values()])
-
-def print_experiment_summary(baseline_results, enhanced_results, improvements):
-    """打印实验总结"""
-    logging.info("\n=== 实验总结 ===")
-    logging.info("=" * 50)
-    
-    metrics = ['rmse', 'mae', 'r2', 'mape']
-    models = ['LSTM', 'GRU', 'CNN_LSTM']
-    
-    # 只输出一次性能提升结果
-    logging.info("\n性能提升结果:")
-    for model in models:
-        logging.info(f"\n{model} 模型:")
-        for metric in metrics:
-            imp = improvements[model].get(f'{metric}_improvement', 0)
-            logging.info(f"{metric}_improvement: {imp:>7.2f}%")
-    
-    # 输出最佳模型信息
-    best_model = find_best_model(improvements)
-    avg_improvement = calculate_average_improvement(improvements[best_model])
-    logging.info(f"\n最佳模型: {best_model}")
-    logging.info(f"平均性能提升: {avg_improvement:.2f}%")
-
-def configure_hardware():
-    """配置硬件优化"""
-    try:
-        # 设置环境变量
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # 抑制所有 TF 日志
-        os.environ['TF_KERAS_BACKEND_LEGACY_OPTIMIZER'] = '1'
-        os.environ['TF_KERAS_BACKEND_LEGACY_WARNING'] = '0'
-        tf.get_logger().setLevel('ERROR')
-        
-        # 检测可用设备（不输出日志）
-        devices = tf.config.list_physical_devices()
-        
-        # GPU 配置
-        gpus = tf.config.list_physical_devices('GPU')
-        if gpus:
-            for gpu in gpus:
-                try:
-                    tf.config.experimental.set_memory_growth(gpu, True)
-                except RuntimeError:
-                    pass
-                    
-        # 线程优化
-        tf.config.threading.set_inter_op_parallelism_threads(2)
-        tf.config.threading.set_intra_op_parallelism_threads(4)
-        
-    except Exception as e:
-        logging.error(f"Hardware configuration error: {str(e)}")
-
-def create_experiment_directories(experiment_type):
-    """创建实验结果目录"""
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    results_dir = os.path.join(RESULTS_DIR, f'{experiment_type}_results_{timestamp}')
-    figures_dir = os.path.join(results_dir, 'figures')
-    
-    # 创建目录
-    os.makedirs(figures_dir, exist_ok=True)
-    
-    return results_dir
-
-if __name__ == "__main__":
-    main() 
+if __name__ == '__main__':
+    main()

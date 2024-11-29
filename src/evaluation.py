@@ -566,3 +566,92 @@ def analyze_feature_importance(model, X_train, y_train, feature_names, results_d
     plt.close()
     
     return importances
+
+def evaluate_models(predictions, y_true):
+    """评估模型性能
+    
+    Args:
+        predictions (dict): 包含各个模型预测结果的字典
+        y_true (array-like): 真实值
+        
+    Returns:
+        dict: 包含各个模型评估指标的字典
+    """
+    results = {}
+    
+    for model_name, y_pred in predictions.items():
+        # 计算评估指标
+        rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+        mae = mean_absolute_error(y_true, y_pred)
+        r2 = r2_score(y_true, y_pred)
+        
+        # 计算MAPE
+        mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+        
+        # 存储结果
+        results[model_name] = {
+            'rmse': rmse,
+            'mae': mae,
+            'r2': r2,
+            'mape': mape
+        }
+        
+        # 打印评估结果
+        logging.info(f"\n{model_name} Model Evaluation Results:")
+        logging.info(f"rmse: {rmse:.4f}")
+        logging.info(f"mae: {mae:.4f}")
+        logging.info(f"r2: {r2:.4f}")
+        logging.info(f"mape: {mape:.4f}")
+    
+    return results
+
+def calculate_improvements(baseline_results, enhanced_results):
+    """计算模型性能提升
+    
+    Args:
+        baseline_results (dict): 基准模型的评估结果
+        enhanced_results (dict): 增强模型的评估结果
+        
+    Returns:
+        dict: 包含各个模型改进幅度的字典
+    """
+    improvements = {}
+    metrics = ['rmse', 'mae', 'r2', 'mape']
+    
+    for model_name in baseline_results.keys():
+        improvements[model_name] = {}
+        for metric in metrics:
+            baseline = baseline_results[model_name][metric]
+            enhanced = enhanced_results[model_name][metric]
+            
+            if metric == 'r2':
+                # R2提升百分比
+                improvement = (enhanced - baseline) / abs(baseline) * 100
+            else:
+                # 其他指标降低百分比
+                improvement = (baseline - enhanced) / baseline * 100
+                
+            improvements[model_name][f'{metric}_improvement'] = improvement
+    
+    # 打印改进结果
+    logging.info("\n=== 实验总结 ===")
+    logging.info("="*50)
+    logging.info("\n性能提升结果:")
+    
+    for model_name, metrics in improvements.items():
+        logging.info(f"\n{model_name} 模型:")
+        for metric, value in metrics.items():
+            logging.info(f"{metric}: {value:>8.2f}%")
+    
+    # 计算平均提升
+    avg_improvements = {}
+    for model_name in improvements.keys():
+        avg_improvements[model_name] = np.mean(list(improvements[model_name].values()))
+    
+    best_model = max(avg_improvements.items(), key=lambda x: x[1])[0]
+    avg_improvement = avg_improvements[best_model]
+    
+    logging.info(f"\n最佳模型: {best_model}")
+    logging.info(f"平均性能提升: {avg_improvement:.2f}%")
+    
+    return improvements

@@ -112,7 +112,7 @@ class DataProcessor:
         return df
         
     def align_and_merge_data(self, traffic_df, weather_df):
-        """对齐并合并交通和天气数据
+        """对齐并并交通和天气数据
         
         Args:
             traffic_df: 处理后的交通数据
@@ -231,8 +231,14 @@ class DataProcessor:
         
         return scaled_data
         
-    def prepare_sequences(self, traffic_data, weather_data=None):
-        """准备序列数据"""
+    def prepare_sequences(self, traffic_data, weather_data=None, sequence_length=12):
+        """准备序列数据
+        
+        Args:
+            traffic_data: 交通数据
+            weather_data: 天气数据（可选）
+            sequence_length: 序列长度，默认为12（1小时，因为数据是5分钟一个点）
+        """
         try:
             # 处理交通数据
             traffic_processed = self.process_traffic_data(traffic_data)
@@ -255,24 +261,39 @@ class DataProcessor:
             X = data_scaled.drop('target', axis=1)
             y = data_scaled['target']
             
+            # 创建序列数据
+            X_sequences = []
+            y_sequences = []
+            
+            for i in range(len(X) - sequence_length):
+                X_sequences.append(X.iloc[i:(i + sequence_length)].values)
+                y_sequences.append(y.iloc[i + sequence_length])
+            
+            X_sequences = np.array(X_sequences)
+            y_sequences = np.array(y_sequences)
+            
             # 使用配置文件中的比例划分数据集
-            total_samples = len(data_scaled)
+            total_samples = len(X_sequences)
             train_size = int(total_samples * TRAIN_RATIO)
             val_size = int(total_samples * VAL_RATIO)
-            test_size = total_samples - train_size - val_size  # 避免舍入误差
             
             # 分割数据
-            X_train = X[:train_size]
-            y_train = y[:train_size]
+            X_train = X_sequences[:train_size]
+            y_train = y_sequences[:train_size]
             
-            X_val = X[train_size:train_size+val_size]
-            y_val = y[train_size:train_size+val_size]
+            X_val = X_sequences[train_size:train_size+val_size]
+            y_val = y_sequences[train_size:train_size+val_size]
             
-            X_test = X[train_size+val_size:]
-            y_test = y[train_size+val_size:]
+            X_test = X_sequences[train_size+val_size:]
+            y_test = y_sequences[train_size+val_size:]
             
             logging.info("数据序列准备完成")
-            return X_train, X_val, X_test, y_train, y_val, y_test
+            logging.info(f"序列形状: {X_sequences.shape}")
+            logging.info(f"训练集: {X_train.shape}")
+            logging.info(f"验证集: {X_val.shape}")
+            logging.info(f"测试集: {X_test.shape}")
+            
+            return X_train, y_train, X_val, y_val, X_test, y_test
             
         except Exception as e:
             logging.error(f"准备数据序列时出错: {str(e)}")
