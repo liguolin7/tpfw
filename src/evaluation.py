@@ -10,29 +10,35 @@ import shap
 from scipy import stats
 from sklearn.inspection import permutation_importance
 
-def evaluate_model(y_true, y_pred, model_name):
-    """Evaluate model performance and return results"""
-    # Handle NaN values
-    mask = ~np.isnan(y_true) & ~np.isnan(y_pred)
-    y_true = y_true[mask]
-    y_pred = y_pred[mask]
-    
-    # Avoid division by zero
-    epsilon = 1e-10
-    y_true_safe = np.where(np.abs(y_true) < epsilon, epsilon, y_true)
-    
-    # Calculate metrics
+def evaluate_model(y_true, y_pred, model_name, model=None, feature_names=None):
+    """评估模型性能"""
     results = {
-        'rmse': np.sqrt(mean_squared_error(y_true, y_pred)),
-        'mae': mean_absolute_error(y_true, y_pred),
-        'r2': r2_score(y_true, y_pred),
-        'mape': np.mean(np.abs((y_true_safe - y_pred) / y_true_safe)) * 100
+        'RMSE': np.sqrt(mean_squared_error(y_true, y_pred)),
+        'MAE': mean_absolute_error(y_true, y_pred),
+        'R2': r2_score(y_true, y_pred),
+        'MAPE': np.mean(np.abs((y_true - y_pred) / y_true)) * 100,
+        'errors': y_pred - y_true  # 保存预测误差
     }
     
-    # Log results
-    logging.info(f"\n{model_name} Model Evaluation Results:")
-    for metric, value in results.items():
-        logging.info(f"{metric}: {value:.4f}")
+    # 计算特征重要性
+    if model is not None and feature_names is not None:
+        try:
+            # 使用模型权重计算特征重要性
+            feature_importance = {}
+            for layer in model.layers:
+                if 'dense' in layer.name.lower():
+                    weights = layer.get_weights()[0]
+                    importance = np.abs(weights).mean(axis=1)
+                    # 确保特征名称和重要性分数长度匹配
+                    min_len = min(len(feature_names), len(importance))
+                    for i in range(min_len):
+                        feature_importance[feature_names[i]] = float(importance[i])
+                    break  # 只使用第一个密集层的权重
+            
+            if feature_importance:
+                results['feature_importance'] = feature_importance
+        except Exception as e:
+            logging.warning(f"计算特征重要性时出错: {str(e)}")
     
     return results
 
@@ -116,19 +122,15 @@ def plot_feature_importance(model, X_test, y_test, feature_names, model_name, re
     plt.close()
 
 def find_best_model(improvements):
-    """根据性能提升找出最佳模型
-    
-    参数:
-        improvements: 性能提升分析结果
-    """
+    """根据性能提升找出最佳模型"""
     model_scores = {}
     
-    # 计算个模型的综合得分
+    # 计算各模型的综合得分
     for model, metrics in improvements.items():
         # 根据RMSE和MAE的降低程度以及R2的提升程度计算得分
-        rmse_score = metrics['rmse_improvement']
-        mae_score = metrics['mae_improvement']
-        r2_score = metrics['r2_improvement']
+        rmse_score = metrics['RMSE_improvement']
+        mae_score = metrics['MAE_improvement']
+        r2_score = metrics['R2_improvement']
         
         # 综合得分（可以根据需要调整权重）
         model_scores[model] = (rmse_score + mae_score + r2_score) / 3
@@ -202,7 +204,7 @@ def plot_time_series_decomposition(data, model_name):
     from statsmodels.tsa.seasonal import seasonal_decompose
     
     # 执行时间序列分解
-    decomposition = seasonal_decompose(data, period=24*7)  # 假设数据是每小时一个点，周期为一周
+    decomposition = seasonal_decompose(data, period=24*7)  # 假设数据是每小时一个点，周期为
     
     plt.figure(figsize=(15, 12))
     
@@ -235,48 +237,42 @@ def plot_time_series_decomposition(data, model_name):
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     
-def analyze_weather_impact(model, X_test, y_test, feature_names):
-    """分析天气特征对预测的影响
-    
-    参数:
-        model: 训练好的模型
-        X_test: 测试集特征
-        y_test: 测试集标签
-        feature_names: 特征名列表
-    """
-    # 执行排列重要性分析
-    result = permutation_importance(
-        model, X_test, y_test,
-        n_repeats=10,
-        random_state=42
-    )
-    
-    # 提取天气相关特征的重要性
-    weather_features = [f for f in feature_names if f.startswith(('temp_', 'humidity_', 'precip_', 'wind_'))]
-    weather_importance = {
-        feature: {
-            'importance_mean': result.importances_mean[feature_names.index(feature)],
-            'importance_std': result.importances_std[feature_names.index(feature)]
-        }
-        for feature in weather_features
+def analyze_weather_impact(baseline_results, enhanced_results, weather_data):
+    """分析天气因素的影响"""
+    impact_analysis = {
+        'overall_improvement': {},
+        'weather_condition_impact': {},
+        'feature_importance': {}
     }
     
-    # 绘制天气特征重要性图
-    plt.figure(figsize=(12, 6))
-    features = list(weather_importance.keys())
-    means = [weather_importance[f]['importance_mean'] for f in features]
-    stds = [weather_importance[f]['importance_std'] for f in features]
+    # 1. 计算总体性能提升
+    for metric in ['rmse', 'mae', 'mape']:
+        improvement = (
+            baseline_results[metric] - enhanced_results[metric]
+        ) / baseline_results[metric] * 100
+        impact_analysis['overall_improvement'][metric] = improvement
     
-    plt.barh(range(len(features)), means, xerr=stds)
-    plt.yticks(range(len(features)), features)
-    plt.xlabel('Feature Importance (Mean Decrease in Error)')
-    plt.title('Weather Features Impact Analysis')
+    # 2. 分不同天气条件下的影响
+    weather_conditions = weather_data['condition'].unique()
+    for condition in weather_conditions:
+        condition_mask = weather_data['condition'] == condition
+        condition_impact = calculate_condition_impact(
+            baseline_results,
+            enhanced_results,
+            condition_mask
+        )
+        impact_analysis['weather_condition_impact'][condition] = condition_impact
     
-    save_path = os.path.join(RESULTS_DIR, 'figures', 'weather_impact_analysis.png')
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    plt.close()
+    # 3. 特征重要性分析
+    weather_features = [
+        'temperature', 'precipitation', 'wind_speed', 'humidity'
+    ]
+    impact_analysis['feature_importance'] = analyze_feature_importance(
+        enhanced_results,
+        weather_data[weather_features]
+    )
     
-    return weather_importance
+    return impact_analysis
 
 def detailed_model_analysis(y_true, y_pred, model_name):
     """详细的模型性能分析"""
@@ -375,7 +371,7 @@ def create_eda_visualizations(traffic_data, weather_data, results_dir):
     plt.style.use('seaborn')
     os.makedirs(os.path.join(results_dir, 'figures'), exist_ok=True)
     
-    # 1. 交通流量时间序列图
+    # 1. 交���流量时间序列图
     plt.figure(figsize=(15, 6))
     daily_traffic = traffic_data.mean(axis=1).resample('D').mean()
     plt.plot(daily_traffic.index, daily_traffic.values)
@@ -398,7 +394,7 @@ def create_eda_visualizations(traffic_data, weather_data, results_dir):
     plt.close()
     
     # 3. 天气变量分布图
-    weather_features = weather_data.columns[:3]  # 选择前三个天气特征
+    weather_features = weather_data.columns[:3]  # 选择前三天气特征
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
     for i, feature in enumerate(weather_features):
         sns.histplot(weather_data[feature], ax=axes[i], kde=True)
@@ -568,90 +564,43 @@ def analyze_feature_importance(model, X_train, y_train, feature_names, results_d
     return importances
 
 def evaluate_models(predictions, y_true):
-    """评估模型性能
-    
-    Args:
-        predictions (dict): 包含各个模型预测结果的字典
-        y_true (array-like): 真实值
-        
-    Returns:
-        dict: 包含各个模型评估指标的字典
-    """
+    """评估模型性能"""
     results = {}
     
     for model_name, y_pred in predictions.items():
         # 计算评估指标
-        rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-        mae = mean_absolute_error(y_true, y_pred)
-        r2 = r2_score(y_true, y_pred)
-        
-        # 计算MAPE
-        mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-        
-        # 存储结果
         results[model_name] = {
-            'rmse': rmse,
-            'mae': mae,
-            'r2': r2,
-            'mape': mape
+            'RMSE': np.sqrt(mean_squared_error(y_true, y_pred)),
+            'MAE': mean_absolute_error(y_true, y_pred),
+            'R2': r2_score(y_true, y_pred),
+            'MAPE': np.mean(np.abs((y_true - y_pred) / y_true)) * 100
         }
         
         # 打印评估结果
         logging.info(f"\n{model_name} Model Evaluation Results:")
-        logging.info(f"rmse: {rmse:.4f}")
-        logging.info(f"mae: {mae:.4f}")
-        logging.info(f"r2: {r2:.4f}")
-        logging.info(f"mape: {mape:.4f}")
+        for metric, value in results[model_name].items():
+            logging.info(f"{metric}: {value:.4f}")
     
     return results
 
 def calculate_improvements(baseline_results, enhanced_results):
-    """计算模型性能提升
-    
-    Args:
-        baseline_results (dict): 基准模型的评估结果
-        enhanced_results (dict): 增强模型的评估结果
-        
-    Returns:
-        dict: 包含各个模型改进幅度的字典
-    """
+    """计算性能提升"""
     improvements = {}
-    metrics = ['rmse', 'mae', 'r2', 'mape']
     
     for model_name in baseline_results.keys():
         improvements[model_name] = {}
+        metrics = ['RMSE', 'MAE', 'R2', 'MAPE']  # 使用大写的指标名称
+        
         for metric in metrics:
             baseline = baseline_results[model_name][metric]
             enhanced = enhanced_results[model_name][metric]
             
-            if metric == 'r2':
-                # R2提升百分比
-                improvement = (enhanced - baseline) / abs(baseline) * 100
+            # 对于R2，提升计算方式不同
+            if metric == 'R2':
+                improvement = (enhanced - baseline) * 100
             else:
-                # 其他指标降低百分比
                 improvement = (baseline - enhanced) / baseline * 100
                 
-            improvements[model_name][f'{metric}_improvement'] = improvement
-    
-    # 打印改进结果
-    logging.info("\n=== 实验总结 ===")
-    logging.info("="*50)
-    logging.info("\n性能提升结果:")
-    
-    for model_name, metrics in improvements.items():
-        logging.info(f"\n{model_name} 模型:")
-        for metric, value in metrics.items():
-            logging.info(f"{metric}: {value:>8.2f}%")
-    
-    # 计算平均提升
-    avg_improvements = {}
-    for model_name in improvements.keys():
-        avg_improvements[model_name] = np.mean(list(improvements[model_name].values()))
-    
-    best_model = max(avg_improvements.items(), key=lambda x: x[1])[0]
-    avg_improvement = avg_improvements[best_model]
-    
-    logging.info(f"\n最佳模型: {best_model}")
-    logging.info(f"平均性能提升: {avg_improvement:.2f}%")
+            improvements[model_name][f'{metric}_improvement'] = improvement  # 保持大写
     
     return improvements

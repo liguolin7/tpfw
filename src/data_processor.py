@@ -3,7 +3,8 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from config import (
     TRAIN_RATIO, VAL_RATIO, TEST_RATIO, 
-    RANDOM_SEED, PROCESSED_DATA_DIR
+    RANDOM_SEED, PROCESSED_DATA_DIR,
+    DATA_CONFIG
 )
 import logging
 from tqdm import tqdm
@@ -38,7 +39,7 @@ class DataProcessor:
         lower_bound = Q1 - 1.5 * IQR
         upper_bound = Q3 + 1.5 * IQR
         
-        # 过滤在范围之外的异常值
+        # 过滤在范围之外的常值
         df = df[(df['avg_speed'] >= lower_bound) & (df['avg_speed'] <= upper_bound)]
         
         return df
@@ -231,70 +232,108 @@ class DataProcessor:
         
         return scaled_data
         
-    def prepare_sequences(self, traffic_data, weather_data=None, sequence_length=12):
-        """准备序列数据
+    def preprocess_weather_features(self, weather_data):
+        """优化天气特征的预处理"""
+        # 1. 创建复合天气特征
+        weather_data['temp_range'] = weather_data['TMAX'] - weather_data['TMIN']  # 温差
+        weather_data['feels_like'] = weather_data['TMAX'] - 0.55 * (1 - weather_data['RHAV']/100) * (weather_data['TMAX'] - 14.5)  # 体感温度
+        weather_data['wind_chill'] = 13.12 + 0.6215 * weather_data['TMAX'] - 11.37 * (weather_data['AWND']**0.16) + 0.3965 * weather_data['TMAX'] * (weather_data['AWND']**0.16)  # 风寒指数
         
-        Args:
-            traffic_data: 交通数据
-            weather_data: 天气数据（可选）
-            sequence_length: 序列长度，默认为12（1小时，因为数据是5分钟一个点）
-        """
-        try:
-            # 处理交通数据
-            traffic_processed = self.process_traffic_data(traffic_data)
+        # 2. 创建天气状况指标
+        weather_data['severe_weather'] = ((weather_data['PRCP'] > weather_data['PRCP'].quantile(0.9)) | 
+                                        (weather_data['AWND'] > weather_data['AWND'].quantile(0.9))).astype(int)
+        
+        # 3. 添加时间特征与天气的交互项
+        weather_data['hour'] = weather_data.index.hour
+        weather_data['is_rush_hour'] = ((weather_data['hour'] >= 7) & (weather_data['hour'] <= 9) | 
+                                       (weather_data['hour'] >= 16) & (weather_data['hour'] <= 18)).astype(int)
+        weather_data['rush_hour_rain'] = weather_data['is_rush_hour'] * (weather_data['PRCP'] > 0).astype(int)
+        
+        return weather_data
+
+    def prepare_sequences(self, traffic_data, weather_data=None, sequence_length=12):
+        """修改数据准备过程"""
+        if weather_data is not None:
+            # 预处理天气特征
+            weather_data = self.preprocess_weather_features(weather_data)
             
-            if weather_data is not None:
-                # 处理天气数据
-                weather_processed = self.process_weather_data(weather_data)
-                # 合并数据
-                data = self.align_and_merge_data(traffic_processed, weather_processed)
-            else:
-                data = traffic_processed
-                
-            # 创建特征
-            data = self.create_features(data, include_weather=(weather_data is not None))
+            # 选择最重要的天气特征
+            weather_features = [
+                'TMAX', 'TMIN', 'PRCP', 'AWND', 'RHAV',
+                'temp_range', 'feels_like', 'wind_chill',
+                'severe_weather', 'rush_hour_rain'
+            ]
+            weather_data = weather_data[weather_features]
             
-            # 标准化数据
-            data_scaled = self.prepare_data(data)
+            # 标准化天气特征
+            weather_data = (weather_data - weather_data.mean()) / weather_data.std()
+        
+        # 处理交通数据
+        traffic_processed = self.process_traffic_data(traffic_data)
+        
+        if weather_data is not None:
+            # 合并数据
+            data = self.align_and_merge_data(traffic_processed, weather_data)
+        else:
+            data = traffic_processed
             
-            # 准备特征和目标变量
-            X = data_scaled.drop('target', axis=1)
-            y = data_scaled['target']
-            
-            # 创建序列数据
-            X_sequences = []
-            y_sequences = []
-            
-            for i in range(len(X) - sequence_length):
-                X_sequences.append(X.iloc[i:(i + sequence_length)].values)
-                y_sequences.append(y.iloc[i + sequence_length])
-            
-            X_sequences = np.array(X_sequences)
-            y_sequences = np.array(y_sequences)
-            
-            # 使用配置文件中的比例划分数据集
-            total_samples = len(X_sequences)
-            train_size = int(total_samples * TRAIN_RATIO)
-            val_size = int(total_samples * VAL_RATIO)
-            
-            # 分割数据
-            X_train = X_sequences[:train_size]
-            y_train = y_sequences[:train_size]
-            
-            X_val = X_sequences[train_size:train_size+val_size]
-            y_val = y_sequences[train_size:train_size+val_size]
-            
-            X_test = X_sequences[train_size+val_size:]
-            y_test = y_sequences[train_size+val_size:]
-            
-            logging.info("数据序列准备完成")
-            logging.info(f"序列形状: {X_sequences.shape}")
-            logging.info(f"训练集: {X_train.shape}")
-            logging.info(f"验证集: {X_val.shape}")
-            logging.info(f"测试集: {X_test.shape}")
-            
-            return X_train, y_train, X_val, y_val, X_test, y_test
-            
-        except Exception as e:
-            logging.error(f"准备数据序列时出错: {str(e)}")
-            raise
+        # 创建特征
+        data = self.create_features(data, include_weather=(weather_data is not None))
+        
+        # 标准化数据
+        data_scaled = self.prepare_data(data)
+        
+        # 准备特征和目标变量
+        X = data_scaled.drop('target', axis=1)
+        y = data_scaled['target']
+        
+        # 创建序列数据
+        X_sequences = []
+        y_sequences = []
+        
+        for i in range(len(X) - sequence_length):
+            X_sequences.append(X.iloc[i:(i + sequence_length)].values)
+            y_sequences.append(y.iloc[i + sequence_length])
+        
+        X_sequences = np.array(X_sequences)
+        y_sequences = np.array(y_sequences)
+        
+        # 使用配置文件中的比例划分数据集
+        total_samples = len(X_sequences)
+        train_size = int(total_samples * TRAIN_RATIO)
+        val_size = int(total_samples * VAL_RATIO)
+        
+        # 分割数据
+        X_train = X_sequences[:train_size]
+        y_train = y_sequences[:train_size]
+        
+        X_val = X_sequences[train_size:train_size+val_size]
+        y_val = y_sequences[train_size:train_size+val_size]
+        
+        X_test = X_sequences[train_size+val_size:]
+        y_test = y_sequences[train_size+val_size:]
+        
+        logging.info("数据序列准备完成")
+        logging.info(f"序列形状: {X_sequences.shape}")
+        logging.info(f"训练集: {X_train.shape}")
+        logging.info(f"验证集: {X_val.shape}")
+        logging.info(f"测试集: {X_test.shape}")
+        
+        return X_train, y_train, X_val, y_val, X_test, y_test
+
+    def augment_weather_data(self, X_weather, y):
+        """天气数据增强"""
+        augmented_X = [X_weather]
+        augmented_y = [y]
+        
+        # 1. 添加高斯噪声
+        noise = np.random.normal(0, 0.01, X_weather.shape)
+        augmented_X.append(X_weather + noise)
+        augmented_y.append(y)
+        
+        # 2. 随机缩放天气特征
+        scale = np.random.uniform(0.95, 1.05, X_weather.shape)
+        augmented_X.append(X_weather * scale)
+        augmented_y.append(y)
+        
+        return np.concatenate(augmented_X, axis=0), np.concatenate(augmented_y, axis=0)

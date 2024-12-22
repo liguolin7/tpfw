@@ -31,10 +31,7 @@ class BaselineModels:
         history = model.fit(
             X_train, y_train,
             validation_data=(X_val, y_val),
-            batch_size=TRAINING_CONFIG['batch_size'],
-            epochs=TRAINING_CONFIG['epochs'],
-            callbacks=TRAINING_CONFIG['callbacks'],
-            verbose=TRAINING_CONFIG['verbose']
+            **TRAINING_CONFIG
         )
         
         self.models[model_name] = model
@@ -192,10 +189,7 @@ class EnhancedModels:
         history = model.fit(
             X_train, y_train,
             validation_data=(X_val, y_val),
-            batch_size=TRAINING_CONFIG['batch_size'],
-            epochs=TRAINING_CONFIG['epochs'],
-            callbacks=TRAINING_CONFIG['callbacks'],
-            verbose=TRAINING_CONFIG['verbose']
+            **TRAINING_CONFIG
         )
         
         self.models[model_name] = model
@@ -209,19 +203,23 @@ class EnhancedModels:
             LSTM(config['units'][0], 
                 return_sequences=True,
                 input_shape=input_shape,
-                kernel_regularizer=l2(config['l2_regularization'])),
+                kernel_regularizer=l2(config['l2_regularization']),
+                recurrent_regularizer=l2(config['l2_regularization'])),
             BatchNormalization(),
             Dropout(config['dropout']),
             
             LSTM(config['units'][1],
                 return_sequences=False,
-                kernel_regularizer=l2(config['l2_regularization'])),
+                kernel_regularizer=l2(config['l2_regularization']),
+                recurrent_regularizer=l2(config['l2_regularization'])),
             BatchNormalization(),
             Dropout(config['dropout']),
             
-            Dense(64, activation='relu'),  # 增加神经元数量
+            Dense(64, activation='relu', kernel_regularizer=l2(config['l2_regularization'])),
             BatchNormalization(),
-            Dense(32, activation='relu'),  # 添加一层
+            Dropout(config['dropout']/2),
+            
+            Dense(32, activation='relu', kernel_regularizer=l2(config['l2_regularization'])),
             BatchNormalization(),
             Dense(1)
         ])
