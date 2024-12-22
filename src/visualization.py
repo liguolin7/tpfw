@@ -8,10 +8,15 @@ import matplotlib.gridspec as gridspec
 
 class DataVisualizer:
     def __init__(self):
-        """初始化可视化器"""
+        """Initialize visualizer"""
         plt.style.use(VISUALIZATION_CONFIG['style'])
         self.figure_size = VISUALIZATION_CONFIG['figure_size']
         self.dpi = VISUALIZATION_CONFIG['dpi']
+        
+        # Set a universal font that supports both English and symbols
+        plt.rcParams['font.family'] = 'DejaVu Sans'
+        # Fallback to Arial if DejaVu Sans is not available
+        plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica']
         
     def plot_traffic_patterns(self, traffic_data, save_path=None):
         """可视化交通流量模式"""
@@ -206,7 +211,7 @@ class DataVisualizer:
         return fig
     
     def plot_model_improvements(self, baseline_metrics, enhanced_metrics, save_path=None):
-        """可视化基准模型和增强模型的性能对比"""
+        """Plot model performance improvements comparison"""
         metrics = ['rmse', 'mae', 'r2', 'mape']
         models = list(baseline_metrics.keys())
         
@@ -220,16 +225,16 @@ class DataVisualizer:
             x = np.arange(len(models))
             width = 0.35
             
-            # 绘制柱状图
+            # Plot bars
             bars1 = axes[idx].bar(x - width/2, baseline_values, width, label='Baseline', color='skyblue', alpha=0.8)
             bars2 = axes[idx].bar(x + width/2, enhanced_values, width, label='Enhanced', color='lightcoral', alpha=0.8)
             
-            # 优化数值标签显示
+            # Add value labels
             def add_value_labels(bars, offset=0):
                 for bar in bars:
                     height = bar.get_height()
                     value = height
-                    # 对不同指标使用不同的格式化方式
+                    # Format values differently for different metrics
                     if metric == 'mape':
                         value_text = f'{value:.1f}'
                     elif metric == 'r2':
@@ -237,7 +242,7 @@ class DataVisualizer:
                     else:
                         value_text = f'{value:.4f}'
                     
-                    # 根据数值大小调整标签位置
+                    # Adjust label position based on value
                     if metric == 'mape':
                         y_pos = height + offset
                         va = 'bottom'
@@ -259,27 +264,27 @@ class DataVisualizer:
                         rotation=0
                     )
             
-            # 为基准模型和增强模型添加数值标签
+            # Add labels for baseline and enhanced models
             max_value = max(max(baseline_values), max(enhanced_values))
-            offset = max_value * 0.02  # 根据数据范围动态调整偏移量
+            offset = max_value * 0.02
             add_value_labels(bars1, offset)
             add_value_labels(bars2, offset)
             
-            # 设置标题和标签
+            # Set titles and labels
             axes[idx].set_title(f'{metric.upper()} Comparison', fontsize=12, pad=20)
             axes[idx].set_xticks(x)
             axes[idx].set_xticklabels(models, rotation=45)
             axes[idx].legend()
             axes[idx].grid(True, alpha=0.3)
             
-            # 调整y轴范围，确保有足够空间显示标签
+            # Adjust y-axis limits
             if metric == 'mape':
                 axes[idx].set_ylim(0, max_value * 1.25)
             else:
                 current_ymin, current_ymax = axes[idx].get_ylim()
                 axes[idx].set_ylim(current_ymin, current_ymax * 1.15)
             
-            # 添加改进百分比标签
+            # Add improvement percentage labels
             for i in range(len(models)):
                 baseline = baseline_values[i]
                 enhanced = enhanced_values[i]
@@ -288,13 +293,14 @@ class DataVisualizer:
                 else:
                     improvement = (baseline - enhanced) / baseline * 100
                 
-                # 调整改进百分比标签的位置
+                # Adjust improvement label position
                 max_height = max(baseline_values[i], enhanced_values[i])
                 if metric == 'mape':
                     y_pos = max_height * 1.15
                 else:
                     y_pos = max_height * 1.08
                 
+                # Use unicode arrows instead of Chinese characters
                 axes[idx].text(
                     i, 
                     y_pos,
@@ -316,37 +322,37 @@ class DataVisualizer:
         return fig
     
     def plot_prediction_vs_actual(self, y_true, y_pred, timestamps, model_name, save_path=None):
-        """可视化预测值与真实值的对比"""
+        """Visualize prediction vs actual values"""
         plt.figure(figsize=(15, 6))
-        plt.plot(timestamps, y_true, label='实际值', color='blue', alpha=0.6)
-        plt.plot(timestamps, y_pred, label='预测值', color='red', alpha=0.6)
+        plt.plot(timestamps, y_true, label='Actual', color='blue', alpha=0.6)
+        plt.plot(timestamps, y_pred, label='Predicted', color='red', alpha=0.6)
         
-        plt.title(f'{model_name} 模型预测结果', fontsize=12)
-        plt.xlabel('时间')
-        plt.ylabel('交通流量')
+        plt.title(f'{model_name} Model Prediction Results', fontsize=12)
+        plt.xlabel('Time')
+        plt.ylabel('Traffic Flow')
         plt.legend()
         plt.grid(True, alpha=0.3)
         
-        # 添加预测误差的阴影区域
-        plt.fill_between(timestamps, y_true, y_pred, color='gray', alpha=0.2, label='预测误差')
+        # Add shadow area for prediction errors
+        plt.fill_between(timestamps, y_true, y_pred, color='gray', alpha=0.2, label='Prediction Error')
         
         if save_path:
             plt.savefig(os.path.join(save_path, f'{model_name}_prediction.png'), dpi=300, bbox_inches='tight')
             plt.close()
     
     def plot_feature_importance(self, feature_importance, feature_names, save_path=None):
-        """可视化特征重要性"""
-        # 对特征重要性进行排序
+        """Visualize feature importance"""
+        # Sort feature importance
         sorted_idx = np.argsort(feature_importance)
         pos = np.arange(sorted_idx.shape[0]) + .5
         
         plt.figure(figsize=(10, 6))
         plt.barh(pos, feature_importance[sorted_idx], align='center')
         plt.yticks(pos, np.array(feature_names)[sorted_idx])
-        plt.xlabel('特征重要性')
-        plt.title('天气特征对交通流量的影响程度')
+        plt.xlabel('Feature Importance')
+        plt.title('Impact of Weather Features on Traffic Flow')
         
-        # 添加数值标签
+        # Add value labels
         for i, v in enumerate(feature_importance[sorted_idx]):
             plt.text(v, i, f'{v:.4f}', va='center')
         
@@ -355,32 +361,32 @@ class DataVisualizer:
             plt.close()
     
     def plot_error_distribution(self, y_true, y_pred, model_name, save_path=None):
-        """可视化预测误差分布"""
+        """Visualize prediction error distribution"""
         errors = y_pred - y_true
         
         plt.figure(figsize=(12, 6))
         
-        # 创建双子图
+        # Create subplots
         gs = gridspec.GridSpec(1, 2, width_ratios=[2, 1])
         
-        # 误差随时间变化
+        # Error over time
         ax1 = plt.subplot(gs[0])
         ax1.plot(range(len(errors)), errors, color='blue', alpha=0.6)
         ax1.axhline(y=0, color='r', linestyle='--', alpha=0.3)
-        ax1.set_title('预测误差随时间的变化')
-        ax1.set_xlabel('时间步')
-        ax1.set_ylabel('预测误差')
+        ax1.set_title('Prediction Error Over Time')
+        ax1.set_xlabel('Time Steps')
+        ax1.set_ylabel('Prediction Error')
         ax1.grid(True, alpha=0.3)
         
-        # 误差分布直方图
+        # Error distribution histogram
         ax2 = plt.subplot(gs[1])
         ax2.hist(errors, bins=50, orientation='horizontal', color='blue', alpha=0.6)
         ax2.axhline(y=0, color='r', linestyle='--', alpha=0.3)
-        ax2.set_title('误差分布')
-        ax2.set_xlabel('频数')
+        ax2.set_title('Error Distribution')
+        ax2.set_xlabel('Frequency')
         
-        # 添加统计信息
-        stats_text = f'均值: {np.mean(errors):.4f}\n标准差: {np.std(errors):.4f}'
+        # Add statistics
+        stats_text = f'Mean: {np.mean(errors):.4f}\nStd: {np.std(errors):.4f}'
         ax2.text(0.95, 0.95, stats_text,
                  transform=ax2.transAxes,
                  verticalalignment='top',
@@ -394,13 +400,13 @@ class DataVisualizer:
             plt.close()
     
     def create_presentation_summary(self, baseline_metrics, enhanced_metrics, save_path=None):
-        """创建用于演示的综合性总结图"""
+        """Create comprehensive summary for presentation"""
         plt.figure(figsize=(15, 10))
         
-        # 创建3x2的子图布局
+        # Create 3x2 subplot layout
         gs = gridspec.GridSpec(3, 2, height_ratios=[1, 1, 0.5])
         
-        # 1. 性能提升总览
+        # 1. Performance improvement overview
         ax1 = plt.subplot(gs[0, :])
         models = list(baseline_metrics.keys())
         metrics = ['RMSE', 'MAE', 'R2', 'MAPE']
@@ -423,40 +429,40 @@ class DataVisualizer:
         ax1.set_yticks(range(len(metrics)))
         ax1.set_xticklabels(models)
         ax1.set_yticklabels(metrics)
-        plt.colorbar(im, ax=ax1, label='改进百分比 (%)')
+        plt.colorbar(im, ax=ax1, label='Improvement (%)')
         
-        # 添加数值标签
+        # Add value labels
         for i in range(len(metrics)):
             for j in range(len(models)):
                 text = ax1.text(j, i, f'{improvements[i][j]:.1f}%',
                               ha="center", va="center", color="black")
         
-        ax1.set_title('模型性能提升热力图')
+        ax1.set_title('Model Performance Improvement Heatmap')
         
-        # 2. 关键发现
+        # 2. Key findings
         ax2 = plt.subplot(gs[1, :])
         ax2.axis('off')
         findings = [
-            "1. CNN-LSTM模型在所有指标上都显示出最好的性能",
-            "2. 加入天气特征后，所有模型的预测准确度都有显著提升",
-            "3. MAPE指标的改进最为明显，表明模型预测更加稳定",
-            "4. 模型对极端天气条件下的交通流量预测仍有提升空间"
+            "1. CNN-LSTM model shows best performance across all metrics",
+            "2. All models show significant improvement with weather features",
+            "3. MAPE shows most notable improvement, indicating more stable predictions",
+            "4. Room for improvement in extreme weather conditions"
         ]
         
-        ax2.text(0.05, 0.8, "关键发现：", fontsize=12, fontweight='bold')
+        ax2.text(0.05, 0.8, "Key Findings:", fontsize=12, fontweight='bold')
         for i, finding in enumerate(findings):
             ax2.text(0.05, 0.6-i*0.2, finding, fontsize=10)
         
-        # 3. 建议
+        # 3. Recommendations
         ax3 = plt.subplot(gs[2, :])
         ax3.axis('off')
         recommendations = [
-            "• 建议在实际应用中优先采用CNN-LSTM模型",
-            "• 考虑收集更多极端天气数据来提升模型鲁棒性",
-            "• 可以尝试集成学习方法进一步提升预测准确度"
+            "• Recommend using CNN-LSTM model for practical applications",
+            "• Consider collecting more extreme weather data to improve robustness",
+            "• Consider ensemble learning methods for further accuracy improvement"
         ]
         
-        ax3.text(0.05, 0.8, "建议：", fontsize=12, fontweight='bold')
+        ax3.text(0.05, 0.8, "Recommendations:", fontsize=12, fontweight='bold')
         for i, rec in enumerate(recommendations):
             ax3.text(0.05, 0.6-i*0.2, rec, fontsize=10)
         

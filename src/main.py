@@ -11,29 +11,9 @@ from visualization import DataVisualizer
 from config import RESULTS_DIR
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
-def create_results_directory():
-    """创建结果目录并返回路径"""
-    # 使用当前时间戳创建目录名
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    
-    # 创建基础实验结果目录
-    baseline_dir = os.path.join(RESULTS_DIR, f'baseline_results_{timestamp}')
-    os.makedirs(baseline_dir, exist_ok=True)
-    
-    # 创建增强实验结果目录
-    enhanced_dir = os.path.join(RESULTS_DIR, f'enhanced_results_{timestamp}')
-    os.makedirs(enhanced_dir, exist_ok=True)
-    
-    # 创建图表目录
-    figures_dir = os.path.join(RESULTS_DIR, 'figures')
-    os.makedirs(figures_dir, exist_ok=True)
-    
-    return baseline_dir, enhanced_dir, figures_dir
-
 def setup_directories():
     """创建必要的目录结构"""
     directories = [
-        os.path.join(RESULTS_DIR, 'experiment_outputs'),
         os.path.join(RESULTS_DIR, 'figures'),
         os.path.join(RESULTS_DIR, 'figures', 'traffic'),
         os.path.join(RESULTS_DIR, 'figures', 'weather'),
@@ -53,9 +33,8 @@ def run_experiment():
         datefmt='%H:%M:%S'
     )
     
-    # 创建目录结构
+    # 只创建必要的目录结构
     setup_directories()
-    baseline_dir, enhanced_dir, figures_dir = create_results_directory()
     
     # 创建可视化器
     visualizer = DataVisualizer()
@@ -71,13 +50,13 @@ def run_experiment():
     logging.info("生成数据分析可视化...")
     visualizer.plot_traffic_patterns(
         traffic_data,
-        save_path=os.path.join(figures_dir, 'traffic')
+        save_path=os.path.join(RESULTS_DIR, 'figures', 'traffic')
     )
     
     visualizer.plot_weather_impact(
         weather_data,
         traffic_data,
-        save_path=os.path.join(figures_dir, 'weather')
+        save_path=os.path.join(RESULTS_DIR, 'figures', 'weather')
     )
     
     # 数据预处理
@@ -143,12 +122,12 @@ def run_experiment():
     logging.info("\n生成模型训练过程可视化...")
     visualizer.plot_model_performance(
         baseline_histories,
-        save_path=os.path.join(figures_dir, 'models', 'baseline')
+        save_path=os.path.join(RESULTS_DIR, 'figures', 'models', 'baseline')
     )
     
     visualizer.plot_model_performance(
         enhanced_histories,
-        save_path=os.path.join(figures_dir, 'models', 'enhanced')
+        save_path=os.path.join(RESULTS_DIR, 'figures', 'models', 'enhanced')
     )
     
     # 确保y_test也是1D数组
@@ -159,13 +138,13 @@ def run_experiment():
     visualizer.plot_prediction_comparison(
         y_test_flat,
         baseline_predictions,
-        save_path=os.path.join(figures_dir, 'comparison', 'baseline')
+        save_path=os.path.join(RESULTS_DIR, 'figures', 'comparison', 'baseline')
     )
     
     visualizer.plot_prediction_comparison(
         y_test_flat,
         enhanced_predictions,
-        save_path=os.path.join(figures_dir, 'comparison', 'enhanced')
+        save_path=os.path.join(RESULTS_DIR, 'figures', 'comparison', 'enhanced')
     )
     
     # 评估模型并生成性能对比可视化
@@ -177,12 +156,12 @@ def run_experiment():
     
     visualizer.plot_model_comparison(
         baseline_metrics,
-        save_path=os.path.join(figures_dir, 'comparison', 'baseline_metrics')
+        save_path=os.path.join(RESULTS_DIR, 'figures', 'comparison', 'baseline_metrics')
     )
     
     visualizer.plot_model_comparison(
         enhanced_metrics,
-        save_path=os.path.join(figures_dir, 'comparison', 'enhanced_metrics')
+        save_path=os.path.join(RESULTS_DIR, 'figures', 'comparison', 'enhanced_metrics')
     )
     
     # 在评估完所有模型后，添加基准模型和增强模型的对比可视化
@@ -194,49 +173,78 @@ def run_experiment():
     
     logging.info("\n实验完成，所有可视化内容已保存到results/figures目录")
     
-    return baseline_metrics, enhanced_metrics, improvements
+    # 找出最佳模型及其预测结果
+    best_model_name = max(enhanced_metrics.items(), key=lambda x: x[1]['r2'])[0]
+    best_model = enhanced_models.models[best_model_name]
+    best_model_predictions = enhanced_predictions[best_model_name]
+    
+    # 创建时间戳
+    test_timestamps = pd.date_range(
+        start='2023-01-01',  # 使用实际的开始日期
+        periods=len(y_test),
+        freq='5T'  # 假设数据是5分钟间隔
+    )
+    
+    # 获取特征名称
+    feature_names = [f'feature_{i}' for i in range(X_test.shape[2])]  # 根据实际特征创建名称
+    
+    return (
+        baseline_metrics, 
+        enhanced_metrics, 
+        improvements,
+        y_test,
+        best_model_predictions,
+        test_timestamps,
+        best_model,
+        feature_names
+    )
 
 def main():
     try:
-        baseline_metrics, enhanced_metrics, improvements = run_experiment()
+        visualizer = DataVisualizer()
+        
+        # 解包返回值
+        (baseline_metrics, enhanced_metrics, improvements,
+         y_test, best_model_predictions, test_timestamps,
+         best_model, feature_names) = run_experiment()
+        
         logging.info("实验成功完成")
-    except Exception as e:
-        logging.error(f"实验过程中出现错误: {str(e)}")
-        raise 
-    
-    # 在评估完所有模型后，添加新的可视化内容
-    
-    # 1. 预测结果可视化（以CNN-LSTM为例）
-    visualizer.plot_prediction_vs_actual(
-        y_true=y_test[:100],  # 展示前100个时间步的预测结果
-        y_pred=best_model_predictions[:100],
-        timestamps=test_timestamps[:100],
-        model_name='CNN_LSTM',
-        save_path='results/figures'
-    )
-    
-    # 2. 特征重要性分析
-    if hasattr(best_model, 'feature_importance_'):
-        visualizer.plot_feature_importance(
-            feature_importance=best_model.feature_importance_,
-            feature_names=feature_names,
+        
+        # 1. 预测结果可视化（以CNN-LSTM为例）
+        visualizer.plot_prediction_vs_actual(
+            y_true=y_test[:100],  # 展示前100个时间步的预测结果
+            y_pred=best_model_predictions[:100],
+            timestamps=test_timestamps[:100],
+            model_name='CNN_LSTM',
             save_path='results/figures'
         )
-    
-    # 3. 预测误差分布
-    visualizer.plot_error_distribution(
-        y_true=y_test,
-        y_pred=best_model_predictions,
-        model_name='CNN_LSTM',
-        save_path='results/figures'
-    )
-    
-    # 4. 创建演示总结
-    visualizer.create_presentation_summary(
-        baseline_metrics=baseline_metrics,
-        enhanced_metrics=enhanced_metrics,
-        save_path='results/figures'
-    )
+        
+        # 2. 特征重要性分析
+        if hasattr(best_model, 'feature_importance_'):
+            visualizer.plot_feature_importance(
+                feature_importance=best_model.feature_importance_,
+                feature_names=feature_names,
+                save_path='results/figures'
+            )
+        
+        # 3. 预测误差分布
+        visualizer.plot_error_distribution(
+            y_true=y_test,
+            y_pred=best_model_predictions,
+            model_name='CNN_LSTM',
+            save_path='results/figures'
+        )
+        
+        # 4. 创建演示总结
+        visualizer.create_presentation_summary(
+            baseline_metrics=baseline_metrics,
+            enhanced_metrics=enhanced_metrics,
+            save_path='results/figures'
+        )
+        
+    except Exception as e:
+        logging.error(f"实验过程中出现错误: {str(e)}")
+        raise
 
 if __name__ == '__main__':
     main()
