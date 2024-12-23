@@ -22,69 +22,64 @@ RANDOM_SEED = 42
 
 # 训练配置
 TRAINING_CONFIG = {
-    'batch_size': 32,     # 减小batch size以增加训练稳定性
-    'epochs': 1,        # 设置为1
+    'batch_size': 128,        # 减小batch size以提高模型灵活性
+    'epochs': 1,           # 设置训练轮数为1
     'verbose': 1,
     'callbacks': [
-        tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss',
-            patience=15,   # 增加耐心值
-            restore_best_weights=True,
-            min_delta=1e-4
-        ),
         tf.keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
-            factor=0.2,
-            patience=5,
+            factor=0.5,          # 更温和的学习率衰减
+            patience=5,          # 减小耐心值，更快响应
             min_lr=1e-6,
-            verbose=1
+            verbose=0
         ),
         tf.keras.callbacks.ModelCheckpoint(
-            'best_model.h5',
+            filepath='best_model.h5',
             save_best_only=True,
-            monitor='val_loss'
-        )
+            monitor='val_loss',
+            verbose=0,
+            save_weights_only=True
+        ),
+        tf.keras.callbacks.EarlyStopping(
+            monitor='val_loss',
+            patience=15,         # 减小耐心值，及时停止
+            restore_best_weights=True,
+            min_delta=1e-5,
+            verbose=0
+        ),
+        tf.keras.callbacks.TerminateOnNaN()
     ]
 }
 
 # 模型配置
 MODEL_CONFIG = {
     'LSTM': {
-        'units': [128, 64],
-        'dropout': 0.3,       # 增加dropout
-        'l2_regularization': 1e-5,  # 增加正则化
+        'units': [64, 32],      # 减小网络规模，避免过拟合
+        'dropout': 0.2,         # 减小dropout
+        'l2_regularization': 1e-4,  # 增加正则化强度
         'optimizer': legacy_optimizers.Adam,
-        'learning_rate': 1e-3,  # 调整学习率
-        'loss': 'huber',
+        'learning_rate': 5e-4,   # 减小学习率
+        'loss': 'mse',          # 使用标准MSE损失
         'metrics': ['mae', 'mse']
     },
     'GRU': {
-        'units': [128, 64],
+        'units': [64, 32],
         'dropout': 0.2,
-        'l2_regularization': 1e-6,
+        'l2_regularization': 1e-4,
         'optimizer': legacy_optimizers.Adam,
-        'learning_rate': 2e-3,
-        'loss': 'huber',
+        'learning_rate': 5e-4,
+        'loss': 'mse',
         'metrics': ['mae', 'mse']
     },
     'CNN_LSTM': {
-        'cnn_filters': [64, 32],
+        'cnn_filters': [32, 16],  # 减小滤波器数量
         'cnn_kernel_size': 3,
-        'lstm_units': [64, 32],
+        'lstm_units': [32, 16],   # 减小LSTM单元
         'dropout': 0.2,
-        'l2_regularization': 1e-6,
+        'l2_regularization': 1e-4,
         'optimizer': legacy_optimizers.Adam,
-        'learning_rate': 2e-3,
-        'loss': 'huber',
-        'metrics': ['mae', 'mse']
-    },
-    'lstm': {
-        'units': [64, 32, 16],
-        'dropout': 0.2,
-        'l2_regularization': 1e-6,
-        'optimizer': legacy_optimizers.Adam,
-        'learning_rate': 2e-3,
-        'loss': 'huber',
+        'learning_rate': 5e-4,
+        'loss': 'mse',
         'metrics': ['mae', 'mse']
     }
 }
@@ -105,17 +100,17 @@ assert abs(TRAIN_RATIO + VAL_RATIO + TEST_RATIO - 1.0) < 1e-10, "数据集划分
 
 # 添加数据处理配置
 DATA_CONFIG = {
-    'sequence_length': 12,
+    'sequence_length': 12,        # 减小序列长度，聚焦于短期依赖
     'prediction_horizon': 1,
     'weather_feature_selection': {
-        'correlation_threshold': 0.1,  # 相关性阈值
-        'importance_threshold': 0.01   # 特征重要性阈值
+        'correlation_threshold': 0.1,  # 提高阈值，只保留重要特征
+        'importance_threshold': 0.05   
     },
     'features': {
         'traffic': ['avg_speed'],
         'weather': [
-            'TMAX', 'TMIN', 'PRCP', 'AWND', 'RHAV',
-            'temp_range', 'feels_like', 'wind_chill',
+            'TMAX', 'TMIN', 'PRCP', 'AWND', 'RHAV',  # ���留基础特征
+            'temp_range', 'feels_like',
             'severe_weather', 'rush_hour_rain'
         ]
     }
@@ -123,7 +118,10 @@ DATA_CONFIG = {
 
 # 添加天气分析配置
 WEATHER_ANALYSIS_CONFIG = {
-    'extreme_weather_threshold': 0.95,  # 极端天气阈值（95百分位）
-    'rush_hour_periods': [(7, 9), (17, 19)],  # 早晚高峰时段
-    'weather_features': ['Temperature', 'Precipitation', 'Wind Speed', 'Humidity']
+    'extreme_weather_threshold': 0.85,  # 调整极端天气阈值
+    'rush_hour_periods': [(6, 10), (16, 20)],  # 扩大高峰时段范围
+    'weather_features': [
+        'Temperature', 'Precipitation', 'Wind Speed', 'Humidity',
+        'Wind Chill', 'Heat Index', 'Visibility', 'Pressure'
+    ]
 }

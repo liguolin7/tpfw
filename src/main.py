@@ -19,72 +19,106 @@ from config import (
     TRAINING_CONFIG
 )
 
-# 设置环境变量以禁用警告
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # 禁止 TensorFlow 日志
+# 设置环境变量以禁用所有 TensorFlow 和 CUDA 警告
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warning, 3=error
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'   # 只使用第一个 GPU
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # 禁用 oneDNN 优化
 os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3'
 os.environ['AUTOGRAPH_VERBOSITY'] = '0'
 os.environ['TF_ENABLE_EAGER_CLIENT_STREAMING_ENQUEUE'] = '0'
+os.environ['TF_ENABLE_DEPRECATION_WARNINGS'] = '0'
+os.environ['TF_ENABLE_RESOURCE_VARIABLES'] = 'true'
+os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
+os.environ['TF_USE_CUDNN_BATCHNORM_SPATIAL_PERSISTENT'] = '1'
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+os.environ['TF_DISABLE_CONTROL_FLOW_V2'] = '1'
+os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '0'
+os.environ['TF_DISABLE_SEGMENT_REDUCTION_OP_DETERMINISM'] = '1'
 
 # 禁用所有 Python 警告
 import warnings
 warnings.filterwarnings('ignore')
 
-# 设置 TensorFlow 日志级别
+# 配置 TensorFlow 日志级别
 tf.get_logger().setLevel('ERROR')
-logging.getLogger('tensorflow').setLevel(logging.ERROR)
+tf.autograph.set_verbosity(0)
 
-# 禁用 TensorFlow 的执行器警告
-tf.get_logger().setLevel('ERROR')
-logging.getLogger('tensorflow').setLevel(logging.ERROR)
+# 禁用 TensorFlow 执行器警告
+tf.debugging.disable_traceback_filtering()
 
-# 禁用 NumPy 的警告
-np.seterr(all='ignore')
-
-# 禁用 Pandas 的警告
-pd.options.mode.chained_assignment = None
-
-# 设置 GPU 内存分配策略
-physical_devices = tf.config.list_physical_devices('GPU')
-if physical_devices:
+# 配置 GPU 内存分配
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
     try:
-        for device in physical_devices:
-            # 启用内存增长
-            tf.config.experimental.set_memory_growth(device, True)
-            
-            # 禁用 TensorFlow 32
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
             tf.config.experimental.enable_tensor_float_32_execution(False)
-            
-            # 设置优化器选项
-            from tensorflow.keras import mixed_precision
-            mixed_precision.set_global_policy('mixed_float16')
-            
-            # 设置计算精度
-            tf.keras.backend.set_floatx('float32')
-            
-            # 配置 GPU 选项
-            tf.config.optimizer.set_jit(False)  # 禁用 XLA
-            tf.config.optimizer.set_experimental_options({
-                'layout_optimizer': True,
-                'constant_folding': True,
-                'shape_optimization': True,
-                'remapping': True,
-                'arithmetic_optimization': True,
-                'dependency_optimization': True,
-                'loop_optimization': True,
-                'function_optimization': True,
-                'debug_stripper': True,
-            })
+        tf.config.set_soft_device_placement(True)
+        tf.config.optimizer.set_jit(False)
+        tf.config.optimizer.set_experimental_options({
+            'layout_optimizer': True,
+            'constant_folding': True,
+            'shape_optimization': True,
+            'remapping': True,
+            'arithmetic_optimization': True,
+            'dependency_optimization': True,
+            'loop_optimization': True,
+            'function_optimization': True,
+            'debug_stripper': True,
+            'disable_meta_optimizer': True,
+            'scoped_allocator_optimization': True,
+            'pin_to_host_optimization': True,
+            'implementation_selector': True,
+            'auto_mixed_precision': False,
+            'disable_model_pruning': True,
+        })
+        
+        # 设置GPU内存限制
+        tf.config.experimental.set_virtual_device_configuration(
+            gpus[0],
+            [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024*4)]
+        )
+        
     except RuntimeError as e:
-        print(e)
+        print(f"GPU configuration error: {e}")
 
-# 设置日志格式
+# 配置日志格式
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(message)s',
     datefmt='%H:%M:%S'
 )
+
+# 创建自定义的日志过滤器
+class TensorFlowFilter(logging.Filter):
+    def filter(self, record):
+        return not any(msg in str(record.getMessage()).lower() for msg in [
+            'executing op',
+            'gradient',
+            'executor',
+            'custom operations',
+            'numa node',
+            'tf-trt',
+            'tensorflow',
+            'cuda',
+            'gpu',
+            'warning',
+            'warn'
+        ])
+
+# 配置日志过滤
+for handler in logging.getLogger().handlers:
+    handler.addFilter(TensorFlowFilter())
+
+# 配置TensorFlow日志
+logging.getLogger('tensorflow').addFilter(TensorFlowFilter())
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
+
+# 禁用 NumPy 警告
+np.seterr(all='ignore')
+
+# 禁用 Pandas 警告
+pd.options.mode.chained_assignment = None
 
 def setup_directories():
     """创建必要的目录结构"""
@@ -94,7 +128,9 @@ def setup_directories():
         os.path.join(RESULTS_DIR, 'figures', 'weather'),
         os.path.join(RESULTS_DIR, 'figures', 'models'),
         os.path.join(RESULTS_DIR, 'figures', 'comparison'),
-        os.path.join(RESULTS_DIR, 'figures', 'analysis')
+        os.path.join(RESULTS_DIR, 'figures', 'analysis'),
+        os.path.join(RESULTS_DIR, 'figures', 'training'),
+        'models'
     ]
     
     for directory in directories:
@@ -104,24 +140,34 @@ def run_experiment():
     """运行实验并返回结果"""
     try:
         data_processor = DataProcessor()
+        visualizer = DataVisualizer()
         
         # 加载数据
+        logging.info("开始加载数据...")
         traffic_data = load_traffic_data()
         weather_data = load_weather_data()
+        logging.info(f"交通数据形状: {traffic_data.shape}, 时间范围: {traffic_data.index[0]} 到 {traffic_data.index[-1]}")
+        logging.info(f"天气数据形状: {weather_data.shape}, 时间范围: {weather_data.index[0]} 到 {weather_data.index[-1]}")
         
         # 准备基准模型数据
+        logging.info("准备基准模型数据...")
         X_train, y_train, X_val, y_val, X_test, y_test = data_processor.prepare_sequences(
             traffic_data=traffic_data,
             sequence_length=DATA_CONFIG['sequence_length']
         )
+        logging.info(f"基准模型数据准备完成:")
+        logging.info(f"训练集: {X_train.shape}, 验证集: {X_val.shape}, 测试集: {X_test.shape}")
         
-        # 准备增强模型数据（包��天气特征）
+        # 准备增强模型数据
+        logging.info("准备增强模型数据(包含天气特征)...")
         X_train_enhanced, y_train_enhanced, X_val_enhanced, y_val_enhanced, X_test_enhanced, y_test_enhanced = \
             data_processor.prepare_sequences(
                 traffic_data=traffic_data,
                 weather_data=weather_data,
                 sequence_length=DATA_CONFIG['sequence_length']
             )
+        logging.info(f"增强模型数据准备完成:")
+        logging.info(f"训练集: {X_train_enhanced.shape}, 验证集: {X_val_enhanced.shape}, 测试集: {X_test_enhanced.shape}")
         
         # 生成特征名称
         feature_names = []
@@ -152,7 +198,7 @@ def run_experiment():
         elif len(feature_names) > input_shape:
             feature_names = feature_names[:input_shape]
         
-        # 对增强模型的训练数据���行数据增强
+        # 对增强模型的训练数据进行数据增强
         X_train_enhanced, y_train_enhanced = data_processor.augment_weather_data(
             X_train_enhanced, y_train_enhanced
         )
@@ -166,22 +212,41 @@ def run_experiment():
         # 训练和评估基准模型
         baseline_models = BaselineModels()
         for model_name in ['LSTM', 'GRU', 'CNN_LSTM']:
+            logging.info(f"\n开始训练基准{model_name}模型...")
+            logging.info(f"配置信息: batch_size={TRAINING_CONFIG['batch_size']}, epochs={TRAINING_CONFIG['epochs']}")
+            
             model, history = baseline_models.train_model(
                 model_name, X_train, y_train, X_val, y_val
             )
-            predictions = model.predict(X_test)
+            predictions = model.predict(X_test, batch_size=TRAINING_CONFIG['batch_size'])
             metrics = evaluate_model(y_test, predictions.flatten(), model_name)
+            
+            logging.info(f"{model_name}基准模型评估结果:")
+            logging.info(f"RMSE: {metrics['RMSE']:.4f}")
+            logging.info(f"MAE: {metrics['MAE']:.4f}")
+            logging.info(f"R2: {metrics['R2']:.4f}")
+            logging.info(f"MAPE: {metrics['MAPE']:.4f}")
+            
             baseline_metrics[model_name] = metrics
             baseline_predictions[model_name] = predictions.flatten()
+            
+            visualizer.plot_training_history(
+                history,
+                f"{model_name}_baseline",
+                os.path.join(RESULTS_DIR, 'figures', 'training')
+            )
         
         # 训练和评估增强模型
         enhanced_models = EnhancedModels()
         for model_name in ['LSTM', 'GRU', 'CNN_LSTM']:
+            logging.info(f"\n开始训练增强{model_name}模型(包含天气特征)...")
+            logging.info(f"配置信息: batch_size={TRAINING_CONFIG['batch_size']}, epochs={TRAINING_CONFIG['epochs']}")
+            
             model, history = enhanced_models.train_model(
                 model_name, X_train_enhanced, y_train_enhanced, 
                 X_val_enhanced, y_val_enhanced
             )
-            predictions = model.predict(X_test_enhanced)
+            predictions = model.predict(X_test_enhanced, batch_size=TRAINING_CONFIG['batch_size'])
             metrics = evaluate_model(
                 y_test, 
                 predictions.flatten(), 
@@ -189,11 +254,29 @@ def run_experiment():
                 model=enhanced_models.models[model_name],
                 feature_names=feature_names
             )
+            
+            logging.info(f"{model_name}增强模型评估结果:")
+            logging.info(f"RMSE: {metrics['RMSE']:.4f}")
+            logging.info(f"MAE: {metrics['MAE']:.4f}")
+            logging.info(f"R2: {metrics['R2']:.4f}")
+            logging.info(f"MAPE: {metrics['MAPE']:.4f}")
+            
             enhanced_metrics[model_name] = metrics
             enhanced_predictions[model_name] = predictions.flatten()
+            
+            visualizer.plot_training_history(
+                history,
+                f"{model_name}_enhanced",
+                os.path.join(RESULTS_DIR, 'figures', 'training')
+            )
         
         # 计算性能提升
         improvements = calculate_improvements(baseline_metrics, enhanced_metrics)
+        logging.info("\n模型性能提升:")
+        for model in improvements:
+            logging.info(f"\n{model}模型改进:")
+            for metric, value in improvements[model].items():
+                logging.info(f"{metric}: {value:.2f}%")
         
         # 获取时间戳
         test_timestamps = traffic_data.index[-len(y_test):]
@@ -331,7 +414,7 @@ def main():
             save_path=os.path.join(RESULTS_DIR, 'figures', 'analysis')
         )
 
-        # 获取特征名称和生成���征重要性分析
+        # 获取特征名称和生成特征重要性分析
         input_shape = enhanced_models.models['LSTM'].input_shape[-1]
         feature_names = []
 
