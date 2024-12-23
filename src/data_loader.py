@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 import logging
-from config import RAW_DATA_DIR, TRAFFIC_FILE, WEATHER_FILE
+from .config import RAW_DATA_DIR, TRAFFIC_FILE, WEATHER_FILE
 
 def load_traffic_data():
     """加载交通数据"""

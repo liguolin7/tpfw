@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
-from config import (
+from .config import (
     TRAIN_RATIO, VAL_RATIO, TEST_RATIO, 
     RANDOM_SEED, PROCESSED_DATA_DIR,
     DATA_CONFIG
@@ -39,7 +39,7 @@ class DataProcessor:
         lower_bound = Q1 - 1.5 * IQR
         upper_bound = Q3 + 1.5 * IQR
         
-        # 过滤在范围之外的常值
+        # 过滤���范围之外的常值
         df = df[(df['avg_speed'] >= lower_bound) & (df['avg_speed'] <= upper_bound)]
         
         return df
@@ -240,14 +240,27 @@ class DataProcessor:
         weather_data['wind_chill'] = 13.12 + 0.6215 * weather_data['TMAX'] - 11.37 * (weather_data['AWND']**0.16) + 0.3965 * weather_data['TMAX'] * (weather_data['AWND']**0.16)  # 风寒指数
         
         # 2. 创建天气状况指标
-        weather_data['severe_weather'] = ((weather_data['PRCP'] > weather_data['PRCP'].quantile(0.9)) | 
-                                        (weather_data['AWND'] > weather_data['AWND'].quantile(0.9))).astype(int)
+        weather_data['severe_weather'] = ((weather_data['PRCP'] > weather_data['PRCP'].quantile(0.95)) | 
+                                        (weather_data['AWND'] > weather_data['AWND'].quantile(0.95))).astype(int)
         
         # 3. 添加时间特征与天气的交互项
         weather_data['hour'] = weather_data.index.hour
         weather_data['is_rush_hour'] = ((weather_data['hour'] >= 7) & (weather_data['hour'] <= 9) | 
                                        (weather_data['hour'] >= 16) & (weather_data['hour'] <= 18)).astype(int)
         weather_data['rush_hour_rain'] = weather_data['is_rush_hour'] * (weather_data['PRCP'] > 0).astype(int)
+        
+        # 4. 添加天气变化率
+        weather_data['temp_change'] = weather_data['TMAX'].diff()
+        weather_data['precip_change'] = weather_data['PRCP'].diff()
+        weather_data['wind_change'] = weather_data['AWND'].diff()
+        
+        # 5. 添加天气趋势特征
+        weather_data['temp_trend'] = weather_data['TMAX'].rolling(window=12).mean()
+        weather_data['precip_trend'] = weather_data['PRCP'].rolling(window=12).mean()
+        weather_data['wind_trend'] = weather_data['AWND'].rolling(window=12).mean()
+        
+        # 6. 处理缺失值
+        weather_data = weather_data.fillna(method='ffill').fillna(method='bfill')
         
         return weather_data
 

@@ -4,20 +4,23 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 from datetime import datetime
-from data_loader import load_traffic_data, load_weather_data
-from data_processor import DataProcessor
-from models import BaselineModels, EnhancedModels
-from evaluation import evaluate_model, evaluate_models, calculate_improvements
-from visualization import DataVisualizer
-from config import (
-    RESULTS_DIR, 
-    TRAIN_RATIO, 
-    VAL_RATIO, 
-    TEST_RATIO,
-    DATA_CONFIG,
-    MODEL_CONFIG,
-    TRAINING_CONFIG
-)
+import importlib
+import sys
+
+# 确保每次都重新加载配置
+if 'src.config' in sys.modules:
+    importlib.reload(sys.modules['src.config'])
+    # 重新加载相关模块
+    if 'src.models' in sys.modules:
+        importlib.reload(sys.modules['src.models'])
+
+from . import config
+
+from .data_loader import load_traffic_data, load_weather_data
+from .data_processor import DataProcessor
+from .models import BaselineModels, EnhancedModels
+from .evaluation import evaluate_model, evaluate_models, calculate_improvements
+from .visualization import DataVisualizer
 
 # 设置环境变量以禁用所有 TensorFlow 和 CUDA 警告
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info, 2=warning, 3=error
@@ -45,42 +48,6 @@ tf.autograph.set_verbosity(0)
 
 # 禁用 TensorFlow 执行器警告
 tf.debugging.disable_traceback_filtering()
-
-# 配置 GPU 内存分配
-gpus = tf.config.list_physical_devices('GPU')
-if gpus:
-    try:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-            tf.config.experimental.enable_tensor_float_32_execution(False)
-        tf.config.set_soft_device_placement(True)
-        tf.config.optimizer.set_jit(False)
-        tf.config.optimizer.set_experimental_options({
-            'layout_optimizer': True,
-            'constant_folding': True,
-            'shape_optimization': True,
-            'remapping': True,
-            'arithmetic_optimization': True,
-            'dependency_optimization': True,
-            'loop_optimization': True,
-            'function_optimization': True,
-            'debug_stripper': True,
-            'disable_meta_optimizer': True,
-            'scoped_allocator_optimization': True,
-            'pin_to_host_optimization': True,
-            'implementation_selector': True,
-            'auto_mixed_precision': False,
-            'disable_model_pruning': True,
-        })
-        
-        # 设置GPU内存限制
-        tf.config.experimental.set_virtual_device_configuration(
-            gpus[0],
-            [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024*4)]
-        )
-        
-    except RuntimeError as e:
-        print(f"GPU configuration error: {e}")
 
 # 配置日志格式
 logging.basicConfig(
@@ -123,13 +90,13 @@ pd.options.mode.chained_assignment = None
 def setup_directories():
     """创建必要的目录结构"""
     directories = [
-        os.path.join(RESULTS_DIR, 'figures'),
-        os.path.join(RESULTS_DIR, 'figures', 'traffic'),
-        os.path.join(RESULTS_DIR, 'figures', 'weather'),
-        os.path.join(RESULTS_DIR, 'figures', 'models'),
-        os.path.join(RESULTS_DIR, 'figures', 'comparison'),
-        os.path.join(RESULTS_DIR, 'figures', 'analysis'),
-        os.path.join(RESULTS_DIR, 'figures', 'training'),
+        os.path.join(config.RESULTS_DIR, 'figures'),
+        os.path.join(config.RESULTS_DIR, 'figures', 'traffic'),
+        os.path.join(config.RESULTS_DIR, 'figures', 'weather'),
+        os.path.join(config.RESULTS_DIR, 'figures', 'models'),
+        os.path.join(config.RESULTS_DIR, 'figures', 'comparison'),
+        os.path.join(config.RESULTS_DIR, 'figures', 'analysis'),
+        os.path.join(config.RESULTS_DIR, 'figures', 'training'),
         'models'
     ]
     
@@ -139,6 +106,16 @@ def setup_directories():
 def run_experiment():
     """运行实验并返回结果"""
     try:
+        # 获取最新配置
+        training_config = config.get_training_config()
+        model_config = config.get_model_config()
+        
+        # 添加详细的配置验证日志
+        logging.info("初始配置验证:")
+        logging.info(f"训练配置: epochs={training_config['epochs']}, batch_size={training_config['batch_size']}")
+        logging.info(f"回调函数: {[type(cb).__name__ for cb in training_config['callbacks']]}")
+        logging.info(f"优化器配置: {model_config}")
+        
         data_processor = DataProcessor()
         visualizer = DataVisualizer()
         
@@ -153,7 +130,7 @@ def run_experiment():
         logging.info("准备基准模型数据...")
         X_train, y_train, X_val, y_val, X_test, y_test = data_processor.prepare_sequences(
             traffic_data=traffic_data,
-            sequence_length=DATA_CONFIG['sequence_length']
+            sequence_length=config.DATA_CONFIG['sequence_length']
         )
         logging.info(f"基准模型数据准备完成:")
         logging.info(f"训练集: {X_train.shape}, 验证集: {X_val.shape}, 测试集: {X_test.shape}")
@@ -164,62 +141,38 @@ def run_experiment():
             data_processor.prepare_sequences(
                 traffic_data=traffic_data,
                 weather_data=weather_data,
-                sequence_length=DATA_CONFIG['sequence_length']
+                sequence_length=config.DATA_CONFIG['sequence_length']
             )
         logging.info(f"增强模型数据准备完成:")
         logging.info(f"训练集: {X_train_enhanced.shape}, 验证集: {X_val_enhanced.shape}, 测试集: {X_test_enhanced.shape}")
         
-        # 生成特征名称
-        feature_names = []
-        # 生成基本特征名称
-        for i in range(DATA_CONFIG['sequence_length']):
-            feature_names.extend([
-                f'traffic_t-{i}',
-                f'temp_t-{i}',
-                f'precip_t-{i}',
-                f'wind_t-{i}',
-                f'humidity_t-{i}'
-            ])
-
-        # 添加额外特征名称
-        feature_names.extend([
-            'hour_sin',
-            'hour_cos',
-            'day_sin',
-            'day_cos',
-            'is_weekend',
-            'is_holiday'
-        ])
-
-        # 确保特征名称列表长度与输入维度匹配
-        input_shape = X_train_enhanced.shape[-1]
-        if len(feature_names) < input_shape:
-            feature_names.extend([f'feature_{i}' for i in range(len(feature_names), input_shape)])
-        elif len(feature_names) > input_shape:
-            feature_names = feature_names[:input_shape]
-        
-        # 对增强模型的训练数据进行数据增强
-        X_train_enhanced, y_train_enhanced = data_processor.augment_weather_data(
-            X_train_enhanced, y_train_enhanced
-        )
-        
-        # 存储实验结果
-        baseline_metrics = {}
-        enhanced_metrics = {}
-        baseline_predictions = {}
-        enhanced_predictions = {}
-        
-        # 训练和评估基准模型
+        # 训练基准模型
+        logging.info("开始训练基准模��...")
         baseline_models = BaselineModels()
+        baseline_metrics = {}
+        baseline_predictions = {}
+        
         for model_name in ['LSTM', 'GRU', 'CNN_LSTM']:
             logging.info(f"\n开始训练基准{model_name}模型...")
-            logging.info(f"配置信息: batch_size={TRAINING_CONFIG['batch_size']}, epochs={TRAINING_CONFIG['epochs']}")
+            logging.info(f"配置信息: batch_size={training_config['batch_size']}, epochs={training_config['epochs']}")
             
             model, history = baseline_models.train_model(
                 model_name, X_train, y_train, X_val, y_val
             )
-            predictions = model.predict(X_test, batch_size=TRAINING_CONFIG['batch_size'])
-            metrics = evaluate_model(y_test, predictions.flatten(), model_name)
+            
+            predictions = model.predict(
+                X_test,
+                batch_size=int(training_config['batch_size']),
+                verbose=training_config['verbose']
+            )
+            metrics = evaluate_model(
+                y_test, 
+                predictions.flatten(), 
+                model_name,
+                model=baseline_models.models[model_name],
+                feature_names=None,
+                history=history
+            )
             
             logging.info(f"{model_name}基准模型评估结果:")
             logging.info(f"RMSE: {metrics['RMSE']:.4f}")
@@ -231,28 +184,67 @@ def run_experiment():
             baseline_predictions[model_name] = predictions.flatten()
             
             visualizer.plot_training_history(
-                history,
-                f"{model_name}_baseline",
-                os.path.join(RESULTS_DIR, 'figures', 'training')
+                history=history,
+                model_name=f"{model_name}_baseline",
+                save_path=os.path.join(config.RESULTS_DIR, 'figures', 'training')
             )
         
-        # 训练和评估增强模型
+        # 训练增强模型
+        logging.info("\n开始训练增强模型...")
         enhanced_models = EnhancedModels()
+        enhanced_metrics = {}
+        enhanced_predictions = {}
+        
+        # 生成特征名称
+        feature_names = []
+        # 生成基本特征名称
+        for i in range(config.DATA_CONFIG['sequence_length']):
+            feature_names.extend([
+                f'traffic_t-{i}',
+                f'temp_t-{i}',
+                f'precip_t-{i}',
+                f'wind_t-{i}',
+                f'humidity_t-{i}'
+            ])
+        
+        # 添加额外特征名称
+        feature_names.extend([
+            'hour_sin',
+            'hour_cos',
+            'day_sin',
+            'day_cos',
+            'is_weekend',
+            'is_holiday'
+        ])
+        
+        # 确保特征名称列表长度与输入维度匹配
+        input_shape = X_train_enhanced.shape[-1]
+        if len(feature_names) < input_shape:
+            feature_names.extend([f'feature_{i}' for i in range(len(feature_names), input_shape)])
+        elif len(feature_names) > input_shape:
+            feature_names = feature_names[:input_shape]
+        
         for model_name in ['LSTM', 'GRU', 'CNN_LSTM']:
             logging.info(f"\n开始训练增强{model_name}模型(包含天气特征)...")
-            logging.info(f"配置信息: batch_size={TRAINING_CONFIG['batch_size']}, epochs={TRAINING_CONFIG['epochs']}")
+            logging.info(f"配置信息: batch_size={training_config['batch_size']}, epochs={training_config['epochs']}")
             
             model, history = enhanced_models.train_model(
                 model_name, X_train_enhanced, y_train_enhanced, 
                 X_val_enhanced, y_val_enhanced
             )
-            predictions = model.predict(X_test_enhanced, batch_size=TRAINING_CONFIG['batch_size'])
+            
+            predictions = model.predict(
+                X_test_enhanced,
+                batch_size=int(training_config['batch_size']),
+                verbose=training_config['verbose']
+            )
             metrics = evaluate_model(
                 y_test, 
                 predictions.flatten(), 
                 model_name,
                 model=enhanced_models.models[model_name],
-                feature_names=feature_names
+                feature_names=feature_names,
+                history=history
             )
             
             logging.info(f"{model_name}增强模型评估结果:")
@@ -265,9 +257,9 @@ def run_experiment():
             enhanced_predictions[model_name] = predictions.flatten()
             
             visualizer.plot_training_history(
-                history,
-                f"{model_name}_enhanced",
-                os.path.join(RESULTS_DIR, 'figures', 'training')
+                history=history,
+                model_name=f"{model_name}_enhanced",
+                save_path=os.path.join(config.RESULTS_DIR, 'figures', 'training')
             )
         
         # 计算性能提升
@@ -286,13 +278,24 @@ def run_experiment():
                 enhanced_predictions, enhanced_models)
         
     except Exception as e:
-        logging.error(f"实验运行出错: {str(e)}")
-        raise
+        logging.error(f"实验运行过程中出现错误: {str(e)}")
+        raise e
 
 def main():
     try:
         # 创建必要的目录
         setup_directories()
+        
+        # 获取最新配置
+        training_config = config.get_training_config()
+        model_config = config.get_model_config()
+        
+        # 验证配置值
+        logging.info(f"初始配置验证:")
+        logging.info(f"epochs={training_config['epochs']}")
+        logging.info(f"batch_size={training_config['batch_size']}")
+        
+        logging.info(f"Initial epochs value: {training_config['epochs']}")
         
         visualizer = DataVisualizer()
         
@@ -308,30 +311,30 @@ def main():
         # 生成交通数据可视化
         visualizer.plot_traffic_patterns(
             traffic_data=traffic_data,
-            save_path=os.path.join(RESULTS_DIR, 'figures', 'traffic')
+            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'traffic')
         )
         
         # 生成天气数据可视化
         visualizer.plot_weather_analysis(
             weather_data=weather_data,
-            save_path=os.path.join(RESULTS_DIR, 'figures', 'weather')
+            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'weather')
         )
         
-        # 生成更多数据分析可视化
+        # 生成更多��据分析可视化
         visualizer.plot_traffic_time_analysis(
             traffic_data=traffic_data,
-            save_path=os.path.join(RESULTS_DIR, 'figures', 'traffic')
+            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'traffic')
         )
 
         visualizer.plot_weather_correlation_analysis(
             weather_data=weather_data,
-            save_path=os.path.join(RESULTS_DIR, 'figures', 'weather')
+            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'weather')
         )
 
         visualizer.plot_traffic_weather_relationship(
             traffic_data=traffic_data,
             weather_data=weather_data,
-            save_path=os.path.join(RESULTS_DIR, 'figures', 'analysis')
+            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'analysis')
         )
         
         # 1. 为每个模型生成对比图
@@ -342,7 +345,7 @@ def main():
                 y_pred=baseline_predictions[model_name][:100],
                 timestamps=test_timestamps[:100],
                 model_name=f'{model_name}_baseline',
-                save_path=os.path.join(RESULTS_DIR, 'figures', 'models')
+                save_path=os.path.join(config.RESULTS_DIR, 'figures', 'models')
             )
             
             # 增强预测结果可视化
@@ -351,7 +354,7 @@ def main():
                 y_pred=enhanced_predictions[model_name][:100],
                 timestamps=test_timestamps[:100],
                 model_name=f'{model_name}_enhanced',
-                save_path=os.path.join(RESULTS_DIR, 'figures', 'models')
+                save_path=os.path.join(config.RESULTS_DIR, 'figures', 'models')
             )
             
             # 预测误差分布
@@ -359,14 +362,14 @@ def main():
                 y_true=y_test,
                 y_pred=baseline_predictions[model_name],
                 model_name=f'{model_name}_baseline',
-                save_path=os.path.join(RESULTS_DIR, 'figures', 'models')
+                save_path=os.path.join(config.RESULTS_DIR, 'figures', 'models')
             )
             
             visualizer.plot_error_distribution(
                 y_true=y_test,
                 y_pred=enhanced_predictions[model_name],
                 model_name=f'{model_name}_enhanced',
-                save_path=os.path.join(RESULTS_DIR, 'figures', 'models')
+                save_path=os.path.join(config.RESULTS_DIR, 'figures', 'models')
             )
         
         # 2. 创建所有模型的预测对比
@@ -381,14 +384,14 @@ def main():
         visualizer.plot_prediction_comparison(
             y_true=y_test,
             predictions_dict=predictions_dict,
-            save_path=os.path.join(RESULTS_DIR, 'figures', 'comparison')
+            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'comparison')
         )
         
         # 3. 创建模型改进对比图
         visualizer.plot_model_improvements(
             baseline_metrics=baseline_metrics,
             enhanced_metrics=enhanced_metrics,
-            save_path=os.path.join(RESULTS_DIR, 'figures', 'comparison')
+            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'comparison')
         )
         
         # 4. 创建总体性能对比表格
@@ -396,14 +399,14 @@ def main():
             baseline_metrics=baseline_metrics,
             enhanced_metrics=enhanced_metrics,
             improvements=improvements,
-            save_path=os.path.join(RESULTS_DIR, 'figures')
+            save_path=os.path.join(config.RESULTS_DIR, 'figures')
         )
         
         # 5. 创建性能提升热力图
         visualizer.create_presentation_summary(
             baseline_metrics=baseline_metrics,
             enhanced_metrics=enhanced_metrics,
-            save_path=os.path.join(RESULTS_DIR, 'figures')
+            save_path=os.path.join(config.RESULTS_DIR, 'figures')
         )
         
         # 生成天气影响分析可视化
@@ -411,15 +414,15 @@ def main():
             baseline_metrics=baseline_metrics,
             enhanced_metrics=enhanced_metrics,
             weather_data=weather_data,
-            save_path=os.path.join(RESULTS_DIR, 'figures', 'analysis')
+            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'analysis')
         )
-
+        
         # 获取特征名称和生成特征重要性分析
         input_shape = enhanced_models.models['LSTM'].input_shape[-1]
         feature_names = []
 
         # 生成基本特征名称
-        for i in range(DATA_CONFIG['sequence_length']):
+        for i in range(config.DATA_CONFIG['sequence_length']):
             feature_names.extend([
                 f'traffic_t-{i}',
                 f'temp_t-{i}',
@@ -437,7 +440,7 @@ def main():
             'is_weekend',
             'is_holiday'
         ])
-
+        
         # 确保特征名称列表长度与输入维度匹配
         if len(feature_names) < input_shape:
             feature_names.extend([f'feature_{i}' for i in range(len(feature_names), input_shape)])
@@ -449,7 +452,7 @@ def main():
             importance_df = visualizer.plot_feature_importance_analysis(
                 model=enhanced_models.models['LSTM'],
                 feature_names=feature_names,
-                save_path=os.path.join(RESULTS_DIR, 'figures', 'analysis')
+                save_path=os.path.join(config.RESULTS_DIR, 'figures', 'analysis')
             )
             if importance_df is not None:
                 logging.info(f"Top 5 most important features:\n{importance_df.head()}")
@@ -461,10 +464,10 @@ def main():
             baseline_metrics=baseline_metrics,
             enhanced_metrics=enhanced_metrics,
             weather_data=weather_data,
-            save_path=os.path.join(RESULTS_DIR, 'figures')
+            save_path=os.path.join(config.RESULTS_DIR, 'figures')
         )
         
-        logging.info("所有模型的对比图和性能分析保存")
+        logging.info("所有模型的��比图和性能分析保存")
         
     except Exception as e:
         logging.error(f"实验过程中出现错误: {str(e)}")

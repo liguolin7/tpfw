@@ -4,13 +4,13 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 import os
-from config import RESULTS_DIR, RANDOM_SEED
+from .config import RESULTS_DIR, RANDOM_SEED
 import logging
 import shap
 from scipy import stats
 from sklearn.inspection import permutation_importance
 
-def evaluate_model(y_true, y_pred, model_name, model=None, feature_names=None):
+def evaluate_model(y_true, y_pred, model_name, model=None, feature_names=None, history=None):
     """评估模型性能"""
     results = {
         'RMSE': np.sqrt(mean_squared_error(y_true, y_pred)),
@@ -19,6 +19,10 @@ def evaluate_model(y_true, y_pred, model_name, model=None, feature_names=None):
         'MAPE': np.mean(np.abs((y_true - y_pred) / y_true)) * 100,
         'errors': y_pred - y_true  # 保存预测误差
     }
+    
+    # 保存训练历史
+    if history is not None:
+        results['history'] = history
     
     # 计算特征重要性
     if model is not None and feature_names is not None:
@@ -115,7 +119,7 @@ def plot_feature_importance(model, X_test, y_test, feature_names, model_name, re
     plt.bar(range(len(feature_names)), importance[indices], align='center')
     plt.xticks(range(len(feature_names)), [feature_names[i] for i in indices], rotation=90)
     plt.xlabel('特征')
-    plt.ylabel('重要性')
+    plt.ylabel('重要��')
     plt.tight_layout()
     save_path = os.path.join(results_dir, f'{model_name}_feature_importance.png')
     plt.savefig(save_path, dpi=300)
@@ -371,7 +375,7 @@ def create_eda_visualizations(traffic_data, weather_data, results_dir):
     plt.style.use('seaborn')
     os.makedirs(os.path.join(results_dir, 'figures'), exist_ok=True)
     
-    # 1. 交���流量时间序列图
+    # 1. 交通流量时间序列图
     plt.figure(figsize=(15, 6))
     daily_traffic = traffic_data.mean(axis=1).resample('D').mean()
     plt.plot(daily_traffic.index, daily_traffic.values)
