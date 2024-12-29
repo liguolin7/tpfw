@@ -147,7 +147,7 @@ def run_experiment():
         logging.info(f"训练集: {X_train_enhanced.shape}, 验证集: {X_val_enhanced.shape}, 测试集: {X_test_enhanced.shape}")
         
         # 训练基准模型
-        logging.info("开始训练基准模��...")
+        logging.info("开始训练基准模型...")
         baseline_models = BaselineModels()
         baseline_metrics = {}
         baseline_predictions = {}
@@ -311,30 +311,30 @@ def main():
         # 生成交通数据可视化
         visualizer.plot_traffic_patterns(
             traffic_data=traffic_data,
-            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'traffic')
+            save_path=visualizer.subdirs['traffic']
         )
         
         # 生成天气数据可视化
         visualizer.plot_weather_analysis(
             weather_data=weather_data,
-            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'weather')
+            save_path=visualizer.subdirs['weather']
         )
         
-        # 生成更多��据分析可视化
+        # 生成更多数据分析可视化
         visualizer.plot_traffic_time_analysis(
             traffic_data=traffic_data,
-            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'traffic')
+            save_path=visualizer.subdirs['traffic']
         )
 
         visualizer.plot_weather_correlation_analysis(
             weather_data=weather_data,
-            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'weather')
+            save_path=visualizer.subdirs['weather']
         )
 
         visualizer.plot_traffic_weather_relationship(
             traffic_data=traffic_data,
             weather_data=weather_data,
-            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'analysis')
+            save_path=visualizer.subdirs['analysis']
         )
         
         # 1. 为每个模型生成对比图
@@ -345,7 +345,7 @@ def main():
                 y_pred=baseline_predictions[model_name][:100],
                 timestamps=test_timestamps[:100],
                 model_name=f'{model_name}_baseline',
-                save_path=os.path.join(config.RESULTS_DIR, 'figures', 'models')
+                save_path=visualizer.subdirs['models']
             )
             
             # 增强预测结果可视化
@@ -354,7 +354,7 @@ def main():
                 y_pred=enhanced_predictions[model_name][:100],
                 timestamps=test_timestamps[:100],
                 model_name=f'{model_name}_enhanced',
-                save_path=os.path.join(config.RESULTS_DIR, 'figures', 'models')
+                save_path=visualizer.subdirs['models']
             )
             
             # 预测误差分布
@@ -362,14 +362,14 @@ def main():
                 y_true=y_test,
                 y_pred=baseline_predictions[model_name],
                 model_name=f'{model_name}_baseline',
-                save_path=os.path.join(config.RESULTS_DIR, 'figures', 'models')
+                save_path=visualizer.subdirs['models']
             )
             
             visualizer.plot_error_distribution(
                 y_true=y_test,
                 y_pred=enhanced_predictions[model_name],
                 model_name=f'{model_name}_enhanced',
-                save_path=os.path.join(config.RESULTS_DIR, 'figures', 'models')
+                save_path=visualizer.subdirs['models']
             )
         
         # 2. 创建所有模型的预测对比
@@ -384,14 +384,14 @@ def main():
         visualizer.plot_prediction_comparison(
             y_true=y_test,
             predictions_dict=predictions_dict,
-            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'comparison')
+            save_path=visualizer.subdirs['comparison']
         )
         
         # 3. 创建模型改进对比图
         visualizer.plot_model_improvements(
             baseline_metrics=baseline_metrics,
             enhanced_metrics=enhanced_metrics,
-            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'comparison')
+            save_path=visualizer.subdirs['comparison']
         )
         
         # 4. 创建总体性能对比表格
@@ -399,28 +399,13 @@ def main():
             baseline_metrics=baseline_metrics,
             enhanced_metrics=enhanced_metrics,
             improvements=improvements,
-            save_path=os.path.join(config.RESULTS_DIR, 'figures')
+            save_path=visualizer.subdirs['metrics']
         )
         
-        # 5. 创建性能提升热力图
-        visualizer.create_presentation_summary(
-            baseline_metrics=baseline_metrics,
-            enhanced_metrics=enhanced_metrics,
-            save_path=os.path.join(config.RESULTS_DIR, 'figures')
-        )
-        
-        # 生成天气影响分析可视化
-        visualizer.plot_weather_impact_comparison(
-            baseline_metrics=baseline_metrics,
-            enhanced_metrics=enhanced_metrics,
-            weather_data=weather_data,
-            save_path=os.path.join(config.RESULTS_DIR, 'figures', 'analysis')
-        )
-        
-        # 获取特征名称和生成特征重要性分析
+        # 生成特征名称
         input_shape = enhanced_models.models['LSTM'].input_shape[-1]
         feature_names = []
-
+        
         # 生成基本特征名称
         for i in range(config.DATA_CONFIG['sequence_length']):
             feature_names.extend([
@@ -430,7 +415,7 @@ def main():
                 f'wind_t-{i}',
                 f'humidity_t-{i}'
             ])
-
+        
         # 添加额外特征名称
         feature_names.extend([
             'hour_sin',
@@ -446,13 +431,13 @@ def main():
             feature_names.extend([f'feature_{i}' for i in range(len(feature_names), input_shape)])
         elif len(feature_names) > input_shape:
             feature_names = feature_names[:input_shape]
-
+        
         # 生成特征重要性分析
         try:
             importance_df = visualizer.plot_feature_importance_analysis(
                 model=enhanced_models.models['LSTM'],
                 feature_names=feature_names,
-                save_path=os.path.join(config.RESULTS_DIR, 'figures', 'analysis')
+                save_path=visualizer.subdirs['analysis']
             )
             if importance_df is not None:
                 logging.info(f"Top 5 most important features:\n{importance_df.head()}")
@@ -464,10 +449,10 @@ def main():
             baseline_metrics=baseline_metrics,
             enhanced_metrics=enhanced_metrics,
             weather_data=weather_data,
-            save_path=os.path.join(config.RESULTS_DIR, 'figures')
+            save_path=visualizer.subdirs['metrics']
         )
         
-        logging.info("所有模型的��比图和性能分析保存")
+        logging.info("所有模型的对比图和性能分析保存完成")
         
     except Exception as e:
         logging.error(f"实验过程中出现错误: {str(e)}")

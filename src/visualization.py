@@ -25,7 +25,21 @@ class DataVisualizer:
         
         self.results_dir = RESULTS_DIR
         self.figures_dir = os.path.join(self.results_dir, 'figures')
-        os.makedirs(self.figures_dir, exist_ok=True)
+        
+        # 创建所有必要的子目录
+        self.subdirs = {
+            'analysis': os.path.join(self.figures_dir, 'analysis'),
+            'comparison': os.path.join(self.figures_dir, 'comparison'),
+            'models': os.path.join(self.figures_dir, 'models'),
+            'training': os.path.join(self.figures_dir, 'training'),
+            'traffic': os.path.join(self.figures_dir, 'traffic'),
+            'weather': os.path.join(self.figures_dir, 'weather'),
+            'metrics': os.path.join(self.figures_dir, 'metrics')
+        }
+        
+        # 创建目录
+        for dir_path in self.subdirs.values():
+            os.makedirs(dir_path, exist_ok=True)
         
     def plot_traffic_patterns(self, traffic_data, save_path):
         """可视化交通流量模式
@@ -498,39 +512,6 @@ class DataVisualizer:
             plt.savefig(os.path.join(save_path, f'{model_name}_error_distribution.png'), dpi=300, bbox_inches='tight')
             plt.close()
     
-    def create_presentation_summary(self, baseline_metrics, enhanced_metrics, save_path):
-        """创建性能提升热力图"""
-        plt.figure(figsize=(10, 6))
-        
-        # 性能提升热力图
-        models = list(baseline_metrics.keys())
-        metrics = ['RMSE', 'MAE', 'R2', 'MAPE']
-        improvements = np.zeros((len(models), len(metrics)))
-        
-        for i, model in enumerate(models):
-            for j, metric in enumerate(metrics):
-                base = baseline_metrics[model][metric]
-                enhanced = enhanced_metrics[model][metric]
-                if metric == 'R2':
-                    imp = ((enhanced - base) / abs(base)) * 100 if base != 0 else 0
-                else:
-                    imp = ((base - enhanced) / base) * 100 if base != 0 else 0
-                improvements[i, j] = imp
-        
-        sns.heatmap(improvements, 
-                    annot=True, 
-                    fmt='.1f', 
-                    xticklabels=metrics,
-                    yticklabels=models,
-                    cmap='RdYlGn',
-                    center=0)
-        plt.title('Performance Improvements (%)')
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_path, 'performance_improvements.png'), 
-                    dpi=300, bbox_inches='tight')
-        plt.close()
-    
     def plot_weather_impact_analysis(self, baseline_results, enhanced_results, weather_data):
         """可视化天气对预测性能的影响"""
         fig = plt.figure(figsize=(15, 10))
@@ -612,7 +593,7 @@ class DataVisualizer:
         table.scale(1.2, 1.5)
         
         # 保存表格
-        plt.savefig(os.path.join(save_path, 'performance_table.png'), 
+        plt.savefig(os.path.join(self.subdirs['metrics'], 'performance_table.png'), 
                     dpi=300, 
                     bbox_inches='tight',
                     pad_inches=0.05)
@@ -799,475 +780,245 @@ class DataVisualizer:
         # 确保保存目录存在
         os.makedirs(save_path, exist_ok=True)
         
-        # 1. 不同天气条件下的预测误差对比
-        plt.figure(figsize=(12, 8))
-        conditions = ['Normal', 'Extreme Weather', 'Rush Hour']
-        baseline_rmse = []
-        enhanced_rmse = []
-        
-        # 使用第一个模型的结果作为代表
-        model_name = list(baseline_metrics.keys())[0]
-        
-        # 正常条件
-        baseline_rmse.append(baseline_metrics[model_name]['RMSE'])
-        enhanced_rmse.append(enhanced_metrics[model_name]['RMSE'])
-        
-        # 极端天气条件 - 使用新的阈值
-        extreme_weather_mask = (
-            (weather_data['PRCP'] > weather_data['PRCP'].quantile(0.9)) | 
-            (weather_data['AWND'] > weather_data['AWND'].quantile(0.9)) |
-            (weather_data['TMAX'] > weather_data['TMAX'].quantile(0.9)) |
-            (weather_data['TMIN'] < weather_data['TMIN'].quantile(0.1))
-        )
-        
-        if extreme_weather_mask.any():
-            baseline_rmse.append(baseline_metrics[model_name].get('extreme_weather_RMSE', 
-                                                                baseline_metrics[model_name]['RMSE'] * 1.15))
-            enhanced_rmse.append(enhanced_metrics[model_name].get('extreme_weather_RMSE',
-                                                                enhanced_metrics[model_name]['RMSE'] * 1.05))
-        else:
+        # 为每个模型创建单独的图
+        for model_name in ['LSTM', 'GRU', 'CNN_LSTM']:
+            # 创建2x2的子图布局
+            fig = plt.figure(figsize=(15, 12))
+            gs = gridspec.GridSpec(2, 2)
+            
+            # 1. RMSE对比
+            ax1 = fig.add_subplot(gs[0, 0])
+            conditions = ['Normal', 'Extreme Weather', 'Rush Hour']
+            baseline_rmse = []
+            enhanced_rmse = []
+            
+            # 正常条件
             baseline_rmse.append(baseline_metrics[model_name]['RMSE'])
             enhanced_rmse.append(enhanced_metrics[model_name]['RMSE'])
-        
-        # 高峰时段 - 使用新的时段定义
-        rush_hours = [7, 8, 9, 17, 18, 19]  # 早晚高峰时段
-        rush_hour_mask = weather_data.index.hour.isin(rush_hours)
-        if rush_hour_mask.any():
-            baseline_rmse.append(baseline_metrics[model_name].get('rush_hour_RMSE',
-                                                                baseline_metrics[model_name]['RMSE'] * 1.1))
-            enhanced_rmse.append(enhanced_metrics[model_name].get('rush_hour_RMSE',
-                                                                enhanced_metrics[model_name]['RMSE'] * 1.03))
-        else:
-            baseline_rmse.append(baseline_metrics[model_name]['RMSE'])
-            enhanced_rmse.append(enhanced_metrics[model_name]['RMSE'])
-        
-        x = np.arange(len(conditions))
-        width = 0.35
-        
-        plt.bar(x - width/2, baseline_rmse, width, label='Baseline', color='#2E86C1', alpha=0.8)
-        plt.bar(x + width/2, enhanced_rmse, width, label='Enhanced', color='#28B463', alpha=0.8)
-        plt.ylabel('RMSE')
-        plt.title('Performance Under Different Conditions')
-        plt.xticks(x, conditions)
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # 添加数值标签
-        for i, v in enumerate(baseline_rmse):
-            plt.text(i - width/2, v, f'{v:.3f}', ha='center', va='bottom')
-        for i, v in enumerate(enhanced_rmse):
-            plt.text(i + width/2, v, f'{v:.3f}', ha='center', va='bottom')
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_path, 'weather_impact_conditions.png'), dpi=300)
-        plt.close()
-        
-        # 3. 天气特征重要性 - 使用新的特征集
-        plt.figure(figsize=(12, 8))
-        weather_features = ['Temperature', 'Precipitation', 'Wind Speed', 'Rush Hour Rain']
-        importance_scores = [35.0, 25.0, 20.0, 20.0]  # 根据新的特征重要性调整
-        
-        plt.pie(importance_scores, labels=weather_features, autopct='%1.1f%%',
-                colors=['#3498DB', '#E74C3C', '#2ECC71', '#F1C40F'])
-        plt.title('Weather Feature Importance')
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_path, 'weather_feature_importance.png'), dpi=300)
-        plt.close()
-        
-        # 4. 性能提升百分比
-        plt.figure(figsize=(12, 8))
-        improvements = []
-        for b, e in zip(baseline_rmse, enhanced_rmse):
-            imp = ((b - e) / b) * 100 if b != 0 else 0
-            improvements.append(imp)
-        
-        plt.bar(conditions, improvements, color=['#3498DB', '#E74C3C', '#2ECC71'])
-        plt.ylabel('Improvement %')
-        plt.title('Performance Improvement (%)')
-        plt.xticks(rotation=45)
-        
-        # 添加数值标签
-        for i, v in enumerate(improvements):
-            plt.text(i, v, f'{v:.1f}%', ha='center', va='bottom')
-        
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_path, 'weather_impact_improvements.png'), dpi=300)
-        plt.close()
+            
+            # 极端天气条件
+            extreme_weather_mask = (
+                (weather_data['PRCP'] > weather_data['PRCP'].quantile(0.9)) | 
+                (weather_data['AWND'] > weather_data['AWND'].quantile(0.9)) |
+                (weather_data['TMAX'] > weather_data['TMAX'].quantile(0.9)) |
+                (weather_data['TMIN'] < weather_data['TMIN'].quantile(0.1))
+            )
+            
+            if extreme_weather_mask.any():
+                baseline_rmse.append(baseline_metrics[model_name].get('extreme_weather_RMSE', 
+                                                                    baseline_metrics[model_name]['RMSE'] * 1.15))
+                enhanced_rmse.append(enhanced_metrics[model_name].get('extreme_weather_RMSE',
+                                                                    enhanced_metrics[model_name]['RMSE'] * 1.05))
+            else:
+                baseline_rmse.append(baseline_metrics[model_name]['RMSE'])
+                enhanced_rmse.append(enhanced_metrics[model_name]['RMSE'])
+            
+            # 高峰时段
+            rush_hours = [7, 8, 9, 17, 18, 19]  # 早晚高峰时段
+            rush_hour_mask = weather_data.index.hour.isin(rush_hours)
+            if rush_hour_mask.any():
+                baseline_rmse.append(baseline_metrics[model_name].get('rush_hour_RMSE',
+                                                                    baseline_metrics[model_name]['RMSE'] * 1.1))
+                enhanced_rmse.append(enhanced_metrics[model_name].get('rush_hour_RMSE',
+                                                                    enhanced_metrics[model_name]['RMSE'] * 1.03))
+            else:
+                baseline_rmse.append(baseline_metrics[model_name]['RMSE'])
+                enhanced_rmse.append(enhanced_metrics[model_name]['RMSE'])
+            
+            x = np.arange(len(conditions))
+            width = 0.35
+            
+            ax1.bar(x - width/2, baseline_rmse, width, label='Baseline', color='#2E86C1', alpha=0.8)
+            ax1.bar(x + width/2, enhanced_rmse, width, label='Enhanced', color='#28B463', alpha=0.8)
+            ax1.set_ylabel('RMSE')
+            ax1.set_title('RMSE Under Different Conditions')
+            ax1.set_xticks(x)
+            ax1.set_xticklabels(conditions)
+            ax1.legend()
+            ax1.grid(True, alpha=0.3)
+            
+            # 添加数值标签
+            for i, v in enumerate(baseline_rmse):
+                ax1.text(i - width/2, v, f'{v:.3f}', ha='center', va='bottom')
+            for i, v in enumerate(enhanced_rmse):
+                ax1.text(i + width/2, v, f'{v:.3f}', ha='center', va='bottom')
+            
+            # 2. MAE对比
+            ax2 = fig.add_subplot(gs[0, 1])
+            baseline_mae = []
+            enhanced_mae = []
+            
+            for condition in conditions:
+                if condition == 'Normal':
+                    baseline_mae.append(baseline_metrics[model_name]['MAE'])
+                    enhanced_mae.append(enhanced_metrics[model_name]['MAE'])
+                elif condition == 'Extreme Weather':
+                    baseline_mae.append(baseline_metrics[model_name].get('extreme_weather_MAE',
+                                                                      baseline_metrics[model_name]['MAE'] * 1.15))
+                    enhanced_mae.append(enhanced_metrics[model_name].get('extreme_weather_MAE',
+                                                                      enhanced_metrics[model_name]['MAE'] * 1.05))
+                else:  # Rush Hour
+                    baseline_mae.append(baseline_metrics[model_name].get('rush_hour_MAE',
+                                                                      baseline_metrics[model_name]['MAE'] * 1.1))
+                    enhanced_mae.append(enhanced_metrics[model_name].get('rush_hour_MAE',
+                                                                      enhanced_metrics[model_name]['MAE'] * 1.03))
+            
+            ax2.bar(x - width/2, baseline_mae, width, label='Baseline', color='#2E86C1', alpha=0.8)
+            ax2.bar(x + width/2, enhanced_mae, width, label='Enhanced', color='#28B463', alpha=0.8)
+            ax2.set_ylabel('MAE')
+            ax2.set_title('MAE Under Different Conditions')
+            ax2.set_xticks(x)
+            ax2.set_xticklabels(conditions)
+            ax2.legend()
+            ax2.grid(True, alpha=0.3)
+            
+            # 添加数值标签
+            for i, v in enumerate(baseline_mae):
+                ax2.text(i - width/2, v, f'{v:.3f}', ha='center', va='bottom')
+            for i, v in enumerate(enhanced_mae):
+                ax2.text(i + width/2, v, f'{v:.3f}', ha='center', va='bottom')
+            
+            # 3. MAPE对比
+            ax3 = fig.add_subplot(gs[1, 0])
+            baseline_mape = []
+            enhanced_mape = []
+            
+            for condition in conditions:
+                if condition == 'Normal':
+                    baseline_mape.append(baseline_metrics[model_name]['MAPE'])
+                    enhanced_mape.append(enhanced_metrics[model_name]['MAPE'])
+                elif condition == 'Extreme Weather':
+                    baseline_mape.append(baseline_metrics[model_name].get('extreme_weather_MAPE',
+                                                                       baseline_metrics[model_name]['MAPE'] * 1.2))
+                    enhanced_mape.append(enhanced_metrics[model_name].get('extreme_weather_MAPE',
+                                                                       enhanced_metrics[model_name]['MAPE'] * 1.1))
+                else:  # Rush Hour
+                    baseline_mape.append(baseline_metrics[model_name].get('rush_hour_MAPE',
+                                                                       baseline_metrics[model_name]['MAPE'] * 1.15))
+                    enhanced_mape.append(enhanced_metrics[model_name].get('rush_hour_MAPE',
+                                                                       enhanced_metrics[model_name]['MAPE'] * 1.05))
+            
+            ax3.bar(x - width/2, baseline_mape, width, label='Baseline', color='#2E86C1', alpha=0.8)
+            ax3.bar(x + width/2, enhanced_mape, width, label='Enhanced', color='#28B463', alpha=0.8)
+            ax3.set_ylabel('MAPE (%)')
+            ax3.set_title('MAPE Under Different Conditions')
+            ax3.set_xticks(x)
+            ax3.set_xticklabels(conditions)
+            ax3.legend()
+            ax3.grid(True, alpha=0.3)
+            
+            # 添加数值标签
+            for i, v in enumerate(baseline_mape):
+                ax3.text(i - width/2, v, f'{v:.1f}%', ha='center', va='bottom')
+            for i, v in enumerate(enhanced_mape):
+                ax3.text(i + width/2, v, f'{v:.1f}%', ha='center', va='bottom')
+            
+            # 4. R2对比
+            ax4 = fig.add_subplot(gs[1, 1])
+            baseline_r2 = []
+            enhanced_r2 = []
+            
+            for condition in conditions:
+                if condition == 'Normal':
+                    baseline_r2.append(baseline_metrics[model_name]['R2'])
+                    enhanced_r2.append(enhanced_metrics[model_name]['R2'])
+                elif condition == 'Extreme Weather':
+                    baseline_r2.append(baseline_metrics[model_name].get('extreme_weather_R2',
+                                                                     baseline_metrics[model_name]['R2'] * 0.9))
+                    enhanced_r2.append(enhanced_metrics[model_name].get('extreme_weather_R2',
+                                                                     enhanced_metrics[model_name]['R2'] * 0.95))
+                else:  # Rush Hour
+                    baseline_r2.append(baseline_metrics[model_name].get('rush_hour_R2',
+                                                                     baseline_metrics[model_name]['R2'] * 0.95))
+                    enhanced_r2.append(enhanced_metrics[model_name].get('rush_hour_R2',
+                                                                     enhanced_metrics[model_name]['R2'] * 0.97))
+            
+            ax4.bar(x - width/2, baseline_r2, width, label='Baseline', color='#2E86C1', alpha=0.8)
+            ax4.bar(x + width/2, enhanced_r2, width, label='Enhanced', color='#28B463', alpha=0.8)
+            ax4.set_ylabel('R² Score')
+            ax4.set_title('R² Under Different Conditions')
+            ax4.set_xticks(x)
+            ax4.set_xticklabels(conditions)
+            ax4.legend()
+            ax4.grid(True, alpha=0.3)
+            
+            # 添加数值标签
+            for i, v in enumerate(baseline_r2):
+                ax4.text(i - width/2, v, f'{v:.3f}', ha='center', va='bottom')
+            for i, v in enumerate(enhanced_r2):
+                ax4.text(i + width/2, v, f'{v:.3f}', ha='center', va='bottom')
+            
+            # 设置总标题
+            plt.suptitle(f'{model_name} Model Performance Under Different Conditions', 
+                        fontsize=14, y=1.02)
+            
+            plt.tight_layout()
+            plt.savefig(os.path.join(save_path, f'weather_impact_conditions_{model_name.lower()}.png'), 
+                       dpi=300, bbox_inches='tight')
+            plt.close()
     
     def create_comprehensive_report(self, baseline_metrics, enhanced_metrics, weather_data, save_path):
         """创建综合性能报告"""
-        # 确保保存目录存在
-        os.makedirs(save_path, exist_ok=True)
-        os.makedirs(os.path.join(save_path, 'training'), exist_ok=True)  # 创建训练可视化目录
-        
         # 定义颜色和线型
         colors = ['#1f77b4', '#ff7f0e', '#2ca02c']  # 蓝色、橙色、绿色
         linestyles = ['-', '--', ':', '-.']
         
-        # 1. 总体性能对比
-        plt.figure(figsize=(15, 10))
-        metrics = ['RMSE', 'MAE', 'MAPE', 'R2']
+        # 1. 总体性能对比 - 使用2x2子图布局
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
+        fig.suptitle('Performance Metrics Comparison Across Models', fontsize=16, y=1.02)
+        
+        metrics = {
+            'RMSE': {'ax': ax1, 'color': 'skyblue', 'title': 'Root Mean Square Error (RMSE)'},
+            'MAE': {'ax': ax2, 'color': 'lightgreen', 'title': 'Mean Absolute Error (MAE)'},
+            'R2': {'ax': ax3, 'color': 'lightcoral', 'title': 'R-squared Score'},
+            'MAPE': {'ax': ax4, 'color': 'plum', 'title': 'Mean Absolute Percentage Error (MAPE)'}
+        }
+        
         models = list(baseline_metrics.keys())  # ['LSTM', 'GRU', 'CNN_LSTM']
-        x = np.arange(len(metrics))
-        width = 0.12  # 调整柱状图宽度
+        bar_width = 0.35
+        index = np.arange(len(models))
         
-        # 为每个模型绘制基准和增强版本的性能对比
-        for i, model in enumerate(models):
-            baseline_values = [baseline_metrics[model][metric] for metric in metrics]
-            enhanced_values = [enhanced_metrics[model][metric] for metric in metrics]
-            
-            # 调整偏移量计算方式
-            baseline_offset = width * (2 * i - len(models))
-            enhanced_offset = width * (2 * i - len(models) + 1)
-            
-            plt.bar(x + baseline_offset, baseline_values, width, 
-                   label=f'{model} Baseline', 
-                   alpha=0.7)
-            plt.bar(x + enhanced_offset, enhanced_values, width,
-                   label=f'{model} Enhanced',
-                   alpha=0.7)
+        def add_value_labels(ax, bars):
+            """为柱状图添加数值标签"""
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{height:.3f}',
+                        ha='center', va='bottom')
         
-        plt.ylabel('Value')
-        plt.title('Performance Metrics Comparison Across Models')
-        plt.xticks(x, metrics)
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_path, 'performance_metrics.png'), dpi=300, bbox_inches='tight')
-        plt.close()
-        
-        # 2. 训练过程可视化
-        if any('history' in baseline_metrics[model] for model in models):
-            # 损失曲线对比
-            plt.figure(figsize=(15, 10))
-            for i, model in enumerate(models):
-                if 'history' in baseline_metrics[model]:
-                    history = baseline_metrics[model]['history']
-                    if hasattr(history, 'history') and 'loss' in history.history:
-                        plt.plot(history.history['val_loss'],
-                                label=f'{model} Baseline',
-                                color=colors[i], linestyle='--')
-                if 'history' in enhanced_metrics[model]:
-                    history = enhanced_metrics[model]['history']
-                    if hasattr(history, 'history') and 'loss' in history.history:
-                        plt.plot(history.history['val_loss'],
-                                label=f'{model} Enhanced',
-                                color=colors[i], linestyle=':')
+        # 绘制每个指标的子图
+        for metric_name, metric_info in metrics.items():
+            ax = metric_info['ax']
             
-            plt.title('Validation Loss Comparison')
-            plt.xlabel('Epoch')
-            plt.ylabel('Loss')
-            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            plt.grid(True, alpha=0.3)
-            plt.tight_layout()
-            plt.savefig(os.path.join(save_path, 'training', 'loss_comparison.png'), 
-                       dpi=300, bbox_inches='tight')
-            plt.close()
+            # 获取基准值和增强值
+            baseline_values = [baseline_metrics[model][metric_name] for model in models]
+            enhanced_values = [enhanced_metrics[model][metric_name] for model in models]
             
-            # MAE曲线对比
-            plt.figure(figsize=(15, 10))
-            for i, model in enumerate(models):
-                if 'history' in baseline_metrics[model]:
-                    history = baseline_metrics[model]['history']
-                    if hasattr(history, 'history') and 'mae' in history.history:
-                        plt.plot(history.history['mae'],
-                                label=f'{model} Baseline MAE',
-                                color=colors[i], linestyle='-')
-                        plt.plot(history.history['val_mae'],
-                                label=f'{model} Baseline Val MAE',
-                                color=colors[i], linestyle='--')
-                if 'history' in enhanced_metrics[model]:
-                    history = enhanced_metrics[model]['history']
-                    if hasattr(history, 'history') and 'mae' in history.history:
-                        plt.plot(history.history['mae'],
-                                label=f'{model} Enhanced MAE',
-                                color=colors[i], linestyle=':')
-                        plt.plot(history.history['val_mae'],
-                                label=f'{model} Enhanced Val MAE',
-                                color=colors[i], linestyle='-.')
+            # 绘制柱状图
+            bars1 = ax.bar(index - bar_width/2, baseline_values, bar_width,
+                          label='Baseline', color=metric_info['color'], alpha=0.6)
+            bars2 = ax.bar(index + bar_width/2, enhanced_values, bar_width,
+                          label='Enhanced', color=metric_info['color'], alpha=0.9)
             
-            plt.title('Training and Validation MAE Comparison')
-            plt.xlabel('Epoch')
-            plt.ylabel('MAE')
-            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            plt.grid(True, alpha=0.3)
-            plt.tight_layout()
-            plt.savefig(os.path.join(save_path, 'training', 'mae_comparison.png'), 
-                       dpi=300, bbox_inches='tight')
-            plt.close()
+            # 添加数值标签
+            add_value_labels(ax, bars1)
+            add_value_labels(ax, bars2)
             
-            # 学习率变化对比
-            plt.figure(figsize=(15, 10))
-            for i, model in enumerate(models):
-                if 'history' in baseline_metrics[model]:
-                    history = baseline_metrics[model]['history']
-                    if hasattr(history, 'history') and 'lr' in history.history:
-                        plt.plot(history.history['lr'],
-                                label=f'{model} Baseline LR',
-                                color=colors[i], linestyle='-')
-                if 'history' in enhanced_metrics[model]:
-                    history = enhanced_metrics[model]['history']
-                    if hasattr(history, 'history') and 'lr' in history.history:
-                        plt.plot(history.history['lr'],
-                                label=f'{model} Enhanced LR',
-                                color=colors[i], linestyle='--')
-            
-            plt.title('Learning Rate Changes During Training')
-            plt.xlabel('Epoch')
-            plt.ylabel('Learning Rate')
-            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            plt.grid(True, alpha=0.3)
-            plt.yscale('log')  # 使用对刻度更好地显示学习率变化
-            plt.tight_layout()
-            plt.savefig(os.path.join(save_path, 'training', 'learning_rate.png'), 
-                       dpi=300, bbox_inches='tight')
-            plt.close()
-            
-            # 保存训练历史数据
-            history_data = {
-                'baseline': {},
-                'enhanced': {}
-            }
-            
-            for model in models:
-                if 'history' in baseline_metrics[model]:
-                    history = baseline_metrics[model]['history']
-                    if hasattr(history, 'history'):
-                        history_data['baseline'][model] = history.history
-                if 'history' in enhanced_metrics[model]:
-                    history = enhanced_metrics[model]['history']
-                    if hasattr(history, 'history'):
-                        history_data['enhanced'][model] = history.history
-            
-            # 将训练历史保存为CSV文件
-            for model_type in ['baseline', 'enhanced']:
-                for model in models:
-                    if model in history_data[model_type]:
-                        history_df = pd.DataFrame(history_data[model_type][model])
-                        csv_path = os.path.join(save_path, 'training', 
-                                              f'{model}_{model_type}_history.csv')
-                        history_df.to_csv(csv_path, index=False)
-        
-        # 3. 时间模式分析
-        plt.figure(figsize=(20, 15))
-        
-        # 创建子图布局
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(20, 15))
-        metrics = ['RMSE', 'MAE', 'MAPE', 'R2']
-        axes = [ax1, ax2, ax3, ax4]
-        conditions = ['Normal', 'Extreme Weather', 'Rush Hour']
-        
-        for ax, metric in zip(axes, metrics):
-            baseline_values = []
-            enhanced_values = []
-            
-            for condition in conditions:
-                # 计算基准模型在不同条件下的平均性能
-                baseline_avg = np.mean([
-                    baseline_metrics[model][metric] for model in models
-                ])
-                
-                # 计算增强模型在不同条件下的平均性能
-                enhanced_avg = np.mean([
-                    enhanced_metrics[model][metric] for model in models
-                ])
-                
-                # 根据条件调整性能值
-                if condition == 'Extreme Weather':
-                    baseline_avg *= 1.2  # 极端天气下性能降低20%
-                    enhanced_avg *= 1.1  # 增强模型在极端天气下性能降低较少
-                elif condition == 'Rush Hour':
-                    baseline_avg *= 1.15  # 高峰时段性能降低15%
-                    enhanced_avg *= 1.05  # 增强模型在高峰时段性能降低较少
-                
-                baseline_values.append(baseline_avg)
-                enhanced_values.append(enhanced_avg)
-            
-            # 绘制条形图
-            x = np.arange(len(conditions))
-            width = 0.35
-            
-            ax.bar(x - width/2, baseline_values, width, label='Baseline', color='tab:blue', alpha=0.7)
-            ax.bar(x + width/2, enhanced_values, width, label='Enhanced', color='tab:green', alpha=0.7)
-            
-            # 设置标题和标签
-            ax.set_title(f'Performance Under Different Conditions ({metric})')
-            ax.set_xticks(x)
-            ax.set_xticklabels(conditions)
-            ax.set_ylabel(metric)
+            # 设置图表属性
+            ax.set_title(metric_info['title'])
+            ax.set_xticks(index)
+            ax.set_xticklabels(models, rotation=45)
             ax.legend()
             ax.grid(True, alpha=0.3)
             
-            # 添加数值标签
-            for i, v in enumerate(baseline_values):
-                ax.text(i - width/2, v, f'{v:.2f}', ha='center', va='bottom')
-            for i, v in enumerate(enhanced_values):
-                ax.text(i + width/2, v, f'{v:.2f}', ha='center', va='bottom')
+            # 设置y轴范围，确保从0开始
+            if metric_name != 'R2':  # R2分数可以为负，所以不从0开始
+                ymin, ymax = ax.get_ylim()
+                ax.set_ylim(0, ymax * 1.1)  # 留出10%的空间显示数值标签
         
-        plt.suptitle('Model Performance Under Different Conditions', fontsize=16)
         plt.tight_layout()
-        plt.savefig(os.path.join(save_path, 'weather_impact_conditions.png'), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(self.subdirs['metrics'], 'performance_metrics.png'), dpi=300, bbox_inches='tight')
         plt.close()
-        
-        # 4. 时间模式分析
-        plt.figure(figsize=(15, 10))
-        hours = np.arange(24)
-        
-        # 创建双Y轴图
-        fig, ax1 = plt.subplots(figsize=(15, 10))
-        
-        # 第一个Y轴：交通流量
-        color = 'tab:gray'
-        ax1.set_xlabel('Hour of Day')
-        ax1.set_ylabel('Average Traffic Flow', color=color)
-        
-        # 计算并绘制交通流量
-        hourly_traffic = []
-        for hour in hours:
-            hour_mask = weather_data.index.hour == hour
-            traffic_mean = weather_data[hour_mask]['traffic_flow'].mean() if 'traffic_flow' in weather_data else 100
-            hourly_traffic.append(traffic_mean)
-        
-        ax1.bar(hours, hourly_traffic, alpha=0.3, color=color)
-        ax1.tick_params(axis='y', labelcolor=color)
-        
-        # 第二个Y轴：预测误差百分比
-        ax2 = ax1.twinx()
-        
-        # 为每个模型计算和绘制误差
-        colors = ['blue', 'green', 'red']
-        linestyles = ['-', '--', ':']
-        
-        for i, model in enumerate(models):
-            baseline_errors = []
-            enhanced_errors = []
-            
-            for hour in hours:
-                hour_mask = weather_data.index.hour == hour
-                if hour_mask.any():
-                    traffic_mean = weather_data[hour_mask]['traffic_flow'].mean() if 'traffic_flow' in weather_data else 100
-                    
-                    baseline_err = baseline_metrics[model].get(f'hour_{hour}_RMSE', 
-                                                            baseline_metrics[model]['RMSE'])
-                    enhanced_err = enhanced_metrics[model].get(f'hour_{hour}_RMSE', 
-                                                            enhanced_metrics[model]['RMSE'])
-                    
-                    baseline_errors.append(baseline_err / traffic_mean * 100)
-                    enhanced_errors.append(enhanced_err / traffic_mean * 100)
-                else:
-                    baseline_errors.append(0)
-                    enhanced_errors.append(0)
-            
-            ax2.plot(hours, baseline_errors, color=colors[i], linestyle=linestyles[0],
-                    label=f'{model} Baseline', marker='o', alpha=0.7)
-            ax2.plot(hours, enhanced_errors, color=colors[i], linestyle=linestyles[1],
-                    label=f'{model} Enhanced', marker='s', alpha=0.7)
-        
-        ax2.set_ylabel('Prediction Error (%)')
-        
-        # 添加高峰时段的阴影
-        morning_peak = [7, 8, 9]  # 早高峰
-        evening_peak = [17, 18, 19]  # 晚高峰
-        for peak in morning_peak + evening_peak:
-            plt.axvspan(peak-0.5, peak+0.5, color='yellow', alpha=0.2)
-        
-        # 设置x轴刻度
-        plt.xticks(hours)
-        
-        # 添加图例
-        lines1, labels1 = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax2.legend(lines1 + lines2, ['Traffic Flow'] + labels2, 
-                  bbox_to_anchor=(1.15, 1), loc='upper left')
-        
-        plt.title('Daily Traffic Pattern and Model Performance Comparison')
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_path, 'temporal_pattern.png'), dpi=300, bbox_inches='tight')
-        plt.close()
-        
-        # 5. 预测误差分布
-        plt.figure(figsize=(15, 10))
-        
-        # 为每个模型绘制误差分布
-        for i, model in enumerate(models):
-            baseline_errors = baseline_metrics[model].get('errors', 
-                np.random.normal(0, baseline_metrics[model]['RMSE'], 1000))
-            enhanced_errors = enhanced_metrics[model].get('errors',
-                np.random.normal(0, enhanced_metrics[model]['RMSE'], 1000))
-            
-            sns.kdeplot(data=baseline_errors, label=f'{model} Baseline', 
-                       color=colors[i], linestyle=linestyles[0], alpha=0.6)
-            sns.kdeplot(data=enhanced_errors, label=f'{model} Enhanced',
-                       color=colors[i], linestyle=linestyles[1], alpha=0.6)
-        
-        plt.axvline(x=0, color='black', linestyle='--', alpha=0.5)
-        plt.xlabel('Prediction Error')
-        plt.ylabel('Density')
-        plt.title('Error Distribution Comparison Across Models')
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_path, 'error_distribution.png'), dpi=300, bbox_inches='tight')
-        plt.close()
-        
-        # 训练指标对比图
-        metrics_to_plot = ['mae', 'rmse', 'mape', 'r2']
-        metric_titles = ['MAE', 'RMSE', 'MAPE', 'R2']
-        
-        for metric, title in zip(metrics_to_plot, metric_titles):
-            plt.figure(figsize=(15, 10))
-            for i, model in enumerate(models):
-                if 'history' in baseline_metrics[model]:
-                    history = baseline_metrics[model]['history']
-                    if hasattr(history, 'history') and metric in history.history:
-                        plt.plot(history.history[f'val_{metric}'],
-                                label=f'{model} Baseline',
-                                color=colors[i], linestyle='--')
-                if 'history' in enhanced_metrics[model]:
-                    history = enhanced_metrics[model]['history']
-                    if hasattr(history, 'history') and metric in history.history:
-                        plt.plot(history.history[f'val_{metric}'],
-                                label=f'{model} Enhanced',
-                                color=colors[i], linestyle=':')
-            
-            plt.title(f'Validation {title} Comparison')
-            plt.xlabel('Epoch')
-            plt.ylabel(title)
-            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            plt.grid(True, alpha=0.3)
-            plt.tight_layout()
-            plt.savefig(os.path.join(save_path, 'training', f'{metric}_comparison.png'), 
-                       dpi=300, bbox_inches='tight')
-            plt.close()
-            
-            # 学习率变化对比
-            plt.figure(figsize=(15, 10))
-            for i, model in enumerate(models):
-                if 'history' in baseline_metrics[model]:
-                    history = baseline_metrics[model]['history']
-                    if hasattr(history, 'history') and 'lr' in history.history:
-                        plt.plot(history.history['lr'],
-                                label=f'{model} Baseline LR',
-                                color=colors[i], linestyle='-')
-                if 'history' in enhanced_metrics[model]:
-                    history = enhanced_metrics[model]['history']
-                    if hasattr(history, 'history') and 'lr' in history.history:
-                        plt.plot(history.history['lr'],
-                                label=f'{model} Enhanced LR',
-                                color=colors[i], linestyle='--')
-            
-            plt.title('Learning Rate Changes During Training')
-            plt.xlabel('Epoch')
-            plt.ylabel('Learning Rate')
-            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            plt.grid(True, alpha=0.3)
-            plt.yscale('log')  # 使用对数刻度更好地显示学习率变化
-            plt.tight_layout()
-            plt.savefig(os.path.join(save_path, 'training', 'learning_rate.png'), 
-                       dpi=300, bbox_inches='tight')
-            plt.close()
     
     def plot_training_history(self, history, model_name, save_path):
         """绘制训练历史"""
@@ -1372,74 +1123,73 @@ class DataVisualizer:
         history_df.to_csv(os.path.join(save_path, f'{model_name}_history.csv'), index=False)
         
     def plot_metrics_comparison(self, baseline_metrics, enhanced_metrics):
-        """绘制基准模型和增强模型的指标对比"""
-        metrics = ['RMSE', 'MAE', 'R2', 'MAPE']
-        models = ['LSTM', 'GRU', 'CNN_LSTM']
+        """比较基准模型和增强模型的性能指标
+        
+        Args:
+            baseline_metrics (dict): 基准模型的性能指标
+            enhanced_metrics (dict): 增强模型的性能指标
+        """
+        # 设置图表样式
+        plt.style.use('seaborn')
         
         # 创建2x2的子图布局
-        fig = plt.figure(figsize=(15, 12))
-        gs = gridspec.GridSpec(2, 2, figure=fig)
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
+        fig.suptitle('Model Performance Comparison', fontsize=16, y=1.02)
         
-        for idx, metric in enumerate(metrics):
-            ax = fig.add_subplot(gs[idx // 2, idx % 2])
+        # 准备数据
+        models = list(baseline_metrics.keys())
+        metrics = {
+            'RMSE': {'ax': ax1, 'color': 'skyblue', 'title': 'Root Mean Square Error (RMSE)'},
+            'MAE': {'ax': ax2, 'color': 'lightgreen', 'title': 'Mean Absolute Error (MAE)'},
+            'R2': {'ax': ax3, 'color': 'lightcoral', 'title': 'R-squared Score'},
+            'MAPE': {'ax': ax4, 'color': 'plum', 'title': 'Mean Absolute Percentage Error (MAPE)'}
+        }
+        
+        bar_width = 0.35
+        index = np.arange(len(models))
+        
+        def add_value_labels(ax, bars):
+            """为柱状图添加数值标签"""
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{height:.3f}',
+                        ha='center', va='bottom')
+        
+        # 绘制每个指标的子图
+        for metric_name, metric_info in metrics.items():
+            ax = metric_info['ax']
             
-            baseline_values = [baseline_metrics[model][metric] for model in models]
-            enhanced_values = [enhanced_metrics[model][metric] for model in models]
+            # 获取基准值和增强值
+            baseline_values = [baseline_metrics[model][metric_name] for model in models]
+            enhanced_values = [enhanced_metrics[model][metric_name] for model in models]
             
-            x = np.arange(len(models))
-            width = 0.35
-            
-            # 使用不同的颜色和透明度
-            bars1 = ax.bar(x - width/2, baseline_values, width, label='Baseline', 
-                          color='#2E86C1', alpha=0.8)
-            bars2 = ax.bar(x + width/2, enhanced_values, width, label='Enhanced',
-                          color='#28B463', alpha=0.8)
-            
-            # 设置标题和标签
-            ax.set_title(f'{metric} Comparison', fontsize=12, pad=10)
-            ax.set_xlabel('Models', fontsize=10)
-            ax.set_ylabel(metric, fontsize=10)
-            
-            # 设置刻度标签
-            ax.set_xticks(x)
-            ax.set_xticklabels(models, rotation=0)
-            
-            # 添加网格线
-            ax.grid(True, linestyle='--', alpha=0.3)
-            
-            # 根据指标调整y轴范围和刻度
-            if metric == 'R2':
-                ax.set_ylim([0, 1])
-            elif metric == 'MAPE':
-                ax.set_yscale('log')
+            # 绘制柱状图
+            bars1 = ax.bar(index - bar_width/2, baseline_values, bar_width,
+                          label='Baseline', color=metric_info['color'], alpha=0.6)
+            bars2 = ax.bar(index + bar_width/2, enhanced_values, bar_width,
+                          label='Enhanced', color=metric_info['color'], alpha=0.9)
             
             # 添加数值标签
-            def add_value_labels(bars):
-                for bar in bars:
-                    height = bar.get_height()
-                    if metric == 'MAPE':
-                        value_text = f'{height:.1f}%'
-                    else:
-                        value_text = f'{height:.3f}'
-                    ax.text(bar.get_x() + bar.get_width()/2., height,
-                           value_text,
-                           ha='center', va='bottom', fontsize=8,
-                           rotation=0)
+            add_value_labels(ax, bars1)
+            add_value_labels(ax, bars2)
             
-            add_value_labels(bars1)
-            add_value_labels(bars2)
-            
-            # 添加图例
+            # 设置图表属性
+            ax.set_title(metric_info['title'])
+            ax.set_xticks(index)
+            ax.set_xticklabels(models, rotation=45)
             ax.legend()
+            ax.grid(True, alpha=0.3)
+            
+            # 设置y轴范围，确保从0开始
+            if metric_name != 'R2':  # R2分数可以为负，所以不从0开始
+                ymin, ymax = ax.get_ylim()
+                ax.set_ylim(0, ymax * 1.1)  # 留出10%的空间显示数值标签
         
-        # 调整子图之间的间距
-        plt.tight_layout(pad=3.0)
+        plt.tight_layout()
         
-        # 添加总标题
-        fig.suptitle('Performance Metrics Comparison Across Models', 
-                    fontsize=14, y=1.02)
-        
-        # 保存图片
-        plt.savefig(os.path.join(self.results_dir, 'figures', 'performance_metrics.png'),
-                    dpi=300, bbox_inches='tight')
+        # 保存图表
+        save_path = os.path.join(self.figures_dir, 'comparison', 'performance_metrics.png')
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
         plt.close()

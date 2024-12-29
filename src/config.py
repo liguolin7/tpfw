@@ -77,12 +77,12 @@ def get_model_config():
     """获取模型配置"""
     return {
         'LSTM': {
-            'units': [128, 64, 32],      # 减小网络规模，避免过拟合
-            'dropout': 0.2,              # 减小dropout
-            'l2_regularization': 1e-6,   # 减小正则化强度
+            'units': [128, 64, 32],      # 保持不变
+            'dropout': 0.2,              
+            'l2_regularization': 1e-6,   
             'optimizer': legacy_optimizers.Adam,
-            'learning_rate': 1e-4,       # 降低学习率
-            'loss': 'mse',               # 使用MSE损失
+            'learning_rate': 1e-4,       
+            'loss': 'mse',               
             'metrics': ['mae', 'mse', 'mape']
         },
         'GRU': {
@@ -95,14 +95,14 @@ def get_model_config():
             'metrics': ['mae', 'mse', 'mape']
         },
         'CNN_LSTM': {
-            'cnn_filters': [64, 32, 16],  # 减小CNN复杂度
-            'cnn_kernel_size': 3,         # 减小卷积核尺寸
-            'lstm_units': [64, 32, 16],   # 减小LSTM单元数
-            'dropout': 0.2,
-            'l2_regularization': 1e-6,
+            'cnn_filters': [128, 64, 32],  # 增加CNN滤波器数量
+            'cnn_kernel_size': 5,          # 增加卷积核大小以捕捉更长期的模式
+            'lstm_units': [128, 64, 32],   # 增加LSTM单元数
+            'dropout': 0.15,               # 略微减小dropout以增强学习能力
+            'l2_regularization': 5e-7,     # 减小正则化强度
             'optimizer': legacy_optimizers.Adam,
-            'learning_rate': 1e-4,
-            'loss': 'mse',
+            'learning_rate': 5e-5,         # 使用更小的学习率
+            'loss': 'huber',               # 使用Huber损失提高鲁棒性
             'metrics': ['mae', 'mse', 'mape']
         }
     }
@@ -123,18 +123,19 @@ assert abs(TRAIN_RATIO + VAL_RATIO + TEST_RATIO - 1.0) < 1e-10, "数据集划分
 
 # 添加数据处理配置
 DATA_CONFIG = {
-    'sequence_length': 12,        # 减小序列长度，避免噪声影响
-    'prediction_horizon': 3,      # 保持预测步长不变
+    'sequence_length': 24,        # 增加序列长度，有利于CNN捕捉时序模式
+    'prediction_horizon': 3,      # 保持不变
     'weather_feature_selection': {
-        'correlation_threshold': 0.1,  # 提高相关性阈值，只保留重要特征
+        'correlation_threshold': 0.1,  
         'importance_threshold': 0.05   
     },
     'features': {
         'traffic': ['avg_speed', 'volume', 'occupancy'],
         'weather': [
-            'TMAX', 'TMIN', 'PRCP', 'AWND',  # 减少天气特征，只保留最重要的
+            'TMAX', 'TMIN', 'PRCP', 'AWND',  # 保持关键天气特征
             'temp_range', 'feels_like',
-            'severe_weather', 'rush_hour_rain'
+            'severe_weather', 'rush_hour_rain',
+            'wind_direction'  # 添加风向特征
         ]
     }
 }
