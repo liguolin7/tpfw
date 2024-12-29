@@ -25,35 +25,35 @@ RANDOM_SEED = 42
 class TrainingConfig:
     def __init__(self):
         self.config = {
-            'batch_size': 32,        # 减小batch size以提高模型泛化能力
-            'epochs': 100,           # 增加训练轮数以充分学习
+            'batch_size': 64,        # 增加batch size以提高训练稳定性
+            'epochs': 150,           # 增加训练轮数
             'verbose': 1,
             'callbacks': [
-                # 学习率预热和衰减策略
+                # 更温和的学习率预热和衰减策略
                 tf.keras.callbacks.LearningRateScheduler(
-                    lambda epoch: 1e-3 * tf.math.exp(0.1 * epoch) if epoch < 10
-                    else 1e-3 * tf.math.exp(-0.1 * (epoch - 10))
+                    lambda epoch: 1e-4 * tf.math.exp(0.05 * epoch) if epoch < 20
+                    else 1e-4 * tf.math.exp(-0.05 * (epoch - 20))
                 ),
                 
-                # 改进的ReduceLROnPlateau
+                # 更温和的ReduceLROnPlateau
                 tf.keras.callbacks.ReduceLROnPlateau(
                     monitor='val_loss',
-                    factor=0.5,       # 更温和的学习率衰减
-                    patience=10,       # 增加耐心值
-                    min_lr=1e-6,
+                    factor=0.2,       # 更温和的学习率衰减
+                    patience=15,       # 增加耐心值
+                    min_lr=1e-7,
                     verbose=1
                 ),
                 
-                # 改进的EarlyStopping
+                # 调整EarlyStopping
                 tf.keras.callbacks.EarlyStopping(
                     monitor='val_loss',
-                    patience=20,       # 增加耐心值
+                    patience=30,       # 增加耐心值
                     restore_best_weights=True,
-                    min_delta=1e-4,    # 添加最小改善阈值
+                    min_delta=1e-5,    # 降低最小改善阈值
                     verbose=1
                 ),
                 
-                # 添加模型检查点
+                # 保持ModelCheckpoint不变
                 tf.keras.callbacks.ModelCheckpoint(
                     filepath='best_model.h5',
                     save_best_only=True,
@@ -77,37 +77,37 @@ def get_model_config():
     """获取模型配置"""
     return {
         'LSTM': {
-            'units': [256, 128, 64],      # 增加网络深度和宽度
-            'dropout': 0.3,               # 适当增加dropout
-            'l2_regularization': 5e-5,    # 减小正则化强度
+            'units': [128, 64, 32],      # 减小网络规模，避免过拟合
+            'dropout': 0.2,              # 减小dropout
+            'l2_regularization': 1e-6,   # 减小正则化强度
             'optimizer': legacy_optimizers.Adam,
-            'learning_rate': 1e-3,        # 增大初始学习率
-            'loss': 'huber',              # 使用Huber损失提高鲁棒性
-            'metrics': ['mae', 'mse', 'mape']  # 添加MAPE指标
+            'learning_rate': 1e-4,       # 降低学习率
+            'loss': 'mse',               # 使用MSE损失
+            'metrics': ['mae', 'mse', 'mape']
         },
         'GRU': {
-            'units': [256, 128, 64],
-            'dropout': 0.3,
-            'l2_regularization': 5e-5,
+            'units': [128, 64, 32],
+            'dropout': 0.2,
+            'l2_regularization': 1e-6,
             'optimizer': legacy_optimizers.Adam,
-            'learning_rate': 1e-3,
-            'loss': 'huber',
+            'learning_rate': 1e-4,
+            'loss': 'mse',
             'metrics': ['mae', 'mse', 'mape']
         },
         'CNN_LSTM': {
-            'cnn_filters': [128, 64, 32],  # 增加CNN层数和滤波器
-            'cnn_kernel_size': 5,          # 增大卷积核尺寸
-            'lstm_units': [128, 64, 32],   # 增加LSTM层数和单元
-            'dropout': 0.3,
-            'l2_regularization': 5e-5,
+            'cnn_filters': [64, 32, 16],  # 减小CNN复杂度
+            'cnn_kernel_size': 3,         # 减小卷积核尺寸
+            'lstm_units': [64, 32, 16],   # 减小LSTM单元数
+            'dropout': 0.2,
+            'l2_regularization': 1e-6,
             'optimizer': legacy_optimizers.Adam,
-            'learning_rate': 1e-3,
-            'loss': 'huber',
+            'learning_rate': 1e-4,
+            'loss': 'mse',
             'metrics': ['mae', 'mse', 'mape']
         }
     }
 
-# ���验置
+# 验置
 EXPERIMENT_TYPES = ['baseline', 'enhanced']
 
 # 可视化配置
@@ -123,20 +123,18 @@ assert abs(TRAIN_RATIO + VAL_RATIO + TEST_RATIO - 1.0) < 1e-10, "数据集划分
 
 # 添加数据处理配置
 DATA_CONFIG = {
-    'sequence_length': 24,        # 增加序列长度，捕捉更长期依赖
-    'prediction_horizon': 3,      # 增加预测步长
+    'sequence_length': 12,        # 减小序列长度，避免噪声影响
+    'prediction_horizon': 3,      # 保持预测步长不变
     'weather_feature_selection': {
-        'correlation_threshold': 0.05,  # 降低阈值，包含更多特征
-        'importance_threshold': 0.03   
+        'correlation_threshold': 0.1,  # 提高相关性阈值，只保留重要特征
+        'importance_threshold': 0.05   
     },
     'features': {
-        'traffic': ['avg_speed', 'volume', 'occupancy'],  # 增加交通特征
+        'traffic': ['avg_speed', 'volume', 'occupancy'],
         'weather': [
-            'TMAX', 'TMIN', 'PRCP', 'AWND', 'RHAV',
-            'ADPT', 'ASLP', 'AWDR', 'AWND',
+            'TMAX', 'TMIN', 'PRCP', 'AWND',  # 减少天气特征，只保留最重要的
             'temp_range', 'feels_like',
-            'severe_weather', 'rush_hour_rain',
-            'wind_direction', 'pressure_change'  # 添加更多天气特征
+            'severe_weather', 'rush_hour_rain'
         ]
     }
 }
