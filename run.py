@@ -1,13 +1,13 @@
 """
-主运行脚本
+Main Run Script
 """
 import importlib
 import sys
 
-# 确保每次运行都重新加载配置
+# Ensure configuration is reloaded every time it runs
 if 'src.config' in sys.modules:
     importlib.reload(sys.modules['src.config'])
-    # 重新加载相关模块
+    # Reload related modules
     if 'src.main' in sys.modules:
         importlib.reload(sys.modules['src.main'])
     if 'src.models' in sys.modules:

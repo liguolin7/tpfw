@@ -1,223 +1,234 @@
 2024-12-31 14:16:21 | INFO | ------------------------------
-2024-12-31 14:16:21 | INFO | 实验开始
+2024-12-31 14:16:21 | INFO | Experiment Start
 2024-12-31 14:16:21 | INFO | ------------------------------
-2024-12-31 14:16:21 | INFO | 系统信息：
-2024-12-31 14:16:21 | INFO | Python版本: 3.8.20 (default, Oct  3 2024, 15:24:27) 
+2024-12-31 14:16:21 | INFO | System Information:
+2024-12-31 14:16:21 | INFO | Python Version: 3.8.20 (default, Oct  3 2024, 15:24:27) 
 [GCC 11.2.0]
-2024-12-31 14:16:21 | INFO | NumPy版本: 1.24.3
-2024-12-31 14:16:21 | INFO | Pandas版本: 2.0.3
+2024-12-31 14:16:21 | INFO | NumPy Version: 1.24.3
+2024-12-31 14:16:21 | INFO | Pandas Version: 2.0.3
 2024-12-31 14:16:21 | INFO | --------------------------------------------------
-2024-12-31 14:16:21 | INFO | 实验配置：
-2024-12-31 14:16:21 | INFO | 随机种子: 42
-2024-12-31 14:16:21 | INFO | 数据集划分比例: 训练集=0.7, 验证集=0.15, 测试集=0.15
-2024-12-31 14:16:21 | INFO | 序列长度: 24
-2024-12-31 14:16:21 | INFO | 预测步长: 3
+2024-12-31 14:16:21 | INFO | Experiment Configuration:
+2024-12-31 14:16:21 | INFO | Random Seed: 42
+2024-12-31 14:16:21 | INFO | Data Split Ratio: Training=0.7, Validation=0.15, Test=0.15
+2024-12-31 14:16:21 | INFO | Sequence Length: 24
+2024-12-31 14:16:21 | INFO | Prediction Step: 3
 2024-12-31 14:16:21 | INFO | 
-开始加载数据...
-2024-12-31 14:16:22 | INFO | 加载交通数据: (34272, 207)
-2024-12-31 14:16:22 | INFO | 加载天气数据: (34272, 23)
+Start Loading Data...
+2024-12-31 14:16:22 | INFO | Load Traffic Data: (34272, 207)
+2024-12-31 14:16:22 | INFO | Load Weather Data: (34272, 23)
 2024-12-31 14:16:22 | INFO | 
-数据集信息：
-2024-12-31 14:16:22 | INFO | 交通数据形状: (34272, 207)
-2024-12-31 14:16:22 | INFO | 交通数据时间范围: 2012-03-01 00:00:00 到 2012-06-27 23:55:00
-2024-12-31 14:16:22 | INFO | 天气数据形状: (34272, 23)
-2024-12-31 14:16:22 | INFO | 天气数据时间范围: 2012-03-01 00:00:00 到 2012-06-27 23:55:00
+Data Set Information:
+2024-12-31 14:16:22 | INFO | Traffic Data Shape: (34272, 207)
+2024-12-31 14:16:22 | INFO | Traffic Data Time Range: 2012-03-01 00:00:00 to 2012-06-27 23:55:00
+2024-12-31 14:16:22 | INFO | Weather Data Shape: (34272, 23)
+2024-12-31 14:16:22 | INFO | Weather Data Time Range: 2012-03-01 00:00:00 to 2012-06-27 23:55:00
 2024-12-31 14:16:22 | INFO | 
-训练配置：
-2024-12-31 14:16:22 | INFO | 批次大小: 64
-2024-12-31 14:16:22 | INFO | 训练轮数: 100
-2024-12-31 14:16:22 | INFO | 优化器配置: {'LSTM': {'units': [128, 64, 32], 'dropout': 0.2, 'l2_regularization': 1e-06, 'optimizer': <class 'keras.optimizers.legacy.adam.Adam'>, 'learning_rate': 0.0001, 'loss': <function custom_combined_loss at 0x780de6d23af0>, 'metrics': ['mae', 'mse', 'mape']}, 'GRU': {'units': [128, 64, 32], 'dropout': 0.2, 'l2_regularization': 1e-06, 'optimizer': <class 'keras.optimizers.legacy.adam.Adam'>, 'learning_rate': 0.0001, 'loss': <function custom_combined_loss at 0x780de6d23af0>, 'metrics': ['mae', 'mse', 'mape']}, 'CNN_LSTM': {'cnn_filters': [128, 64, 32], 'cnn_kernel_size': 5, 'lstm_units': [128, 64, 32], 'dropout': 0.15, 'l2_regularization': 5e-07, 'optimizer': <class 'keras.optimizers.legacy.adam.Adam'>, 'learning_rate': 5e-05, 'loss': <function custom_combined_loss at 0x780de6d23af0>, 'metrics': ['mae', 'mse', 'mape']}}
+Training Configuration:
+2024-12-31 14:16:22 | INFO | Batch Size: 64
+2024-12-31 14:16:22 | INFO | Training Rounds: 100
+2024-12-31 14:16:22 | INFO | Optimizer Configuration: {'LSTM': {'units': [128, 64, 32], 'dropout': 0.2, 'l2_regularization': 1e-06, 'optimizer': <class 'keras.optimizers.legacy.adam.Adam'>, 'learning_rate': 0.0001, 'loss': <function custom_combined_loss at 0x780de6d23af0>, 'metrics': ['mae', 'mse', 'mape']}, 'GRU': {'units': [128, 64, 32], 'dropout': 0.2, 'l2_regularization': 1e-06, 'optimizer': <class 'keras.optimizers.legacy.adam.Adam'>, 'learning_rate': 0.0001, 'loss': <function custom_combined_loss at 0x780de6d23af0>, 'metrics': ['mae', 'mse', 'mape']}, 'CNN_LSTM': {'cnn_filters': [128, 64, 32], 'cnn_kernel_size': 5, 'lstm_units': [128, 64, 32], 'dropout': 0.15, 'l2_regularization': 5e-07, 'optimizer': <class 'keras.optimizers.legacy.adam.Adam'>, 'learning_rate': 5e-05, 'loss': <function custom_combined_loss at 0x780de6d23af0>, 'metrics': ['mae', 'mse', 'mape']}}
 2024-12-31 14:16:22 | INFO | 
-开始运行实验...
-2024-12-31 14:16:22 | INFO | 初始配置验证:
-2024-12-31 14:16:22 | INFO | 训练配置: epochs=100, batch_size=64
-2024-12-31 14:16:22 | INFO | 回调函数: ['LearningRateScheduler', 'ReduceLROnPlateau', 'EarlyStopping', 'ModelCheckpoint']
-2024-12-31 14:16:22 | INFO | 优化器配置: {'LSTM': {'units': [128, 64, 32], 'dropout': 0.2, 'l2_regularization': 1e-06, 'optimizer': <class 'keras.optimizers.legacy.adam.Adam'>, 'learning_rate': 0.0001, 'loss': <function custom_combined_loss at 0x780de6d23af0>, 'metrics': ['mae', 'mse', 'mape']}, 'GRU': {'units': [128, 64, 32], 'dropout': 0.2, 'l2_regularization': 1e-06, 'optimizer': <class 'keras.optimizers.legacy.adam.Adam'>, 'learning_rate': 0.0001, 'loss': <function custom_combined_loss at 0x780de6d23af0>, 'metrics': ['mae', 'mse', 'mape']}, 'CNN_LSTM': {'cnn_filters': [128, 64, 32], 'cnn_kernel_size': 5, 'lstm_units': [128, 64, 32], 'dropout': 0.15, 'l2_regularization': 5e-07, 'optimizer': <class 'keras.optimizers.legacy.adam.Adam'>, 'learning_rate': 5e-05, 'loss': <function custom_combined_loss at 0x780de6d23af0>, 'metrics': ['mae', 'mse', 'mape']}}
-2024-12-31 14:16:22 | INFO | 开始加载数据...
-2024-12-31 14:16:22 | INFO | 加载交通数据: (34272, 207)
-2024-12-31 14:16:22 | INFO | 加载天气数据: (34272, 23)
-2024-12-31 14:16:22 | INFO | 交通数据形状: (34272, 207), 时间范围: 2012-03-01 00:00:00 到 2012-06-27 23:55:00
-2024-12-31 14:16:22 | INFO | 天气数据形状: (34272, 23), 时间范围: 2012-03-01 00:00:00 到 2012-06-27 23:55:00
-2024-12-31 14:16:22 | INFO | 准备基准模型数据...
-2024-12-31 14:16:23 | INFO | 数据序列准备完成
-2024-12-31 14:16:23 | INFO | 序列形状: (31969, 24, 219)
-2024-12-31 14:16:23 | INFO | 训练集: (22378, 24, 219)
-2024-12-31 14:16:23 | INFO | 验证集: (4795, 24, 219)
-2024-12-31 14:16:23 | INFO | 测试集: (4796, 24, 219)
-2024-12-31 14:16:23 | INFO | 基准模型数据准备完成:
-2024-12-31 14:16:23 | INFO | 训练集: (22378, 24, 219), 验证集: (4795, 24, 219), 测试集: (4796, 24, 219)
-2024-12-31 14:16:23 | INFO | 准备增强模型数据(包含天气特征)...
-2024-12-31 14:16:23 | INFO | 开始合并数据...
-2024-12-31 14:16:23 | INFO | 数据合并完成，最终数据形状: (32022, 218)
-2024-12-31 14:16:24 | INFO | 数据序列准备完成
-2024-12-31 14:16:24 | INFO | 序列形状: (31969, 24, 229)
-2024-12-31 14:16:24 | INFO | 训练集: (22378, 24, 229)
-2024-12-31 14:16:24 | INFO | 验证集: (4795, 24, 229)
-2024-12-31 14:16:24 | INFO | 测试集: (4796, 24, 229)
-2024-12-31 14:16:24 | INFO | 增强模型数据准备完成:
-2024-12-31 14:16:24 | INFO | 训练集: (22378, 24, 229), 验证集: (4795, 24, 229), 测试集: (4796, 24, 229)
-2024-12-31 14:16:24 | INFO | 开始训练基准模型...
+Start Running Experiment...
+2024-12-31 14:16:22 | INFO | Initial Configuration Validation:
+2024-12-31 14:16:22 | INFO | Training Configuration: epochs=100, batch_size=64
+2024-12-31 14:16:22 | INFO | Callbacks: ['LearningRateScheduler', 'ReduceLROnPlateau', 'EarlyStopping', 'ModelCheckpoint']
+2024-12-31 14:16:22 | INFO | Optimizer Configuration: {'LSTM': {'units': [128, 64, 32], 'dropout': 0.2, 'l2_regularization': 1e-06, 'optimizer': <class 'keras.optimizers.legacy.adam.Adam'>, 'learning_rate': 0.0001, 'loss': <function custom_combined_loss at 0x780de6d23af0>, 'metrics': ['mae', 'mse', 'mape']}, 'GRU': {'units': [128, 64, 32], 'dropout': 0.2, 'l2_regularization': 1e-06, 'optimizer': <class 'keras.optimizers.legacy.adam.Adam'>, 'learning_rate': 0.0001, 'loss': <function custom_combined_loss at 0x780de6d23af0>, 'metrics': ['mae', 'mse', 'mape']}, 'CNN_LSTM': {'cnn_filters': [128, 64, 32], 'cnn_kernel_size': 5, 'lstm_units': [128, 64, 32], 'dropout': 0.15, 'l2_regularization': 5e-07, 'optimizer': <class 'keras.optimizers.legacy.adam.Adam'>, 'learning_rate': 5e-05, 'loss': <function custom_combined_loss at 0x780de6d23af0>, 'metrics': ['mae', 'mse', 'mape']}}
+2024-12-31 14:16:22 | INFO | Start Loading Data...
+2024-12-31 14:16:22 | INFO | Load Traffic Data: (34272, 207)
+2024-12-31 14:16:22 | INFO | Load Weather Data: (34272, 23)
+2024-12-31 14:16:22 | INFO | Traffic Data Shape: (34272, 207), Time Range: 2012-03-01 00:00:00 to 2012-06-27 23:55:00
+2024-12-31 14:16:22 | INFO | Weather Data Shape: (34272, 23), Time Range: 2012-03-01 00:00:00 to 2012-06-27 23:55:00
+2024-12-31 14:16:22 | INFO | Prepare Benchmark Model Data...
+2024-12-31 14:16:23 | INFO | Data Sequence Preparation Complete
+2024-12-31 14:16:23 | INFO | Sequence Shape: (31969, 24, 219)
+2024-12-31 14:16:23 | INFO | Training Set: (22378, 24, 219)
+2024-12-31 14:16:23 | INFO | Validation Set: (4795, 24, 219)
+2024-12-31 14:16:23 | INFO | Test Set: (4796, 24, 219)
+2024-12-31 14:16:23 | INFO | Benchmark Model Data Preparation Complete:
+2024-12-31 14:16:23 | INFO | Training Set: (22378, 24, 219), Validation Set: (4795, 24, 219), Test Set: (4796, 24, 219)
+2024-12-31 14:16:23 | INFO | Prepare Enhanced Model Data (Including Weather Features)...
+2024-12-31 14:16:23 | INFO | Start Merging Data...
+2024-12-31 14:16:23 | INFO | Data Merge Complete, Final Data Shape: (32022, 218)
+2024-12-31 14:16:24 | INFO | Data Sequence Preparation Complete
+2024-12-31 14:16:24 | INFO | Sequence Shape: (31969, 24, 229)
+2024-12-31 14:16:24 | INFO | Training Set: (22378, 24, 229)
+2024-12-31 14:16:24 | INFO | Validation Set: (4795, 24, 229)
+2024-12-31 14:16:24 | INFO | Test Set: (4796, 24, 229)
+2024-12-31 14:16:24 | INFO | Enhanced Model Data Preparation Complete:
+2024-12-31 14:16:24 | INFO | Training Set: (22378, 24, 229), Validation Set: (4795, 24, 229), Test Set: (4796, 24, 229)
+2024-12-31 14:16:24 | INFO | Start Training Benchmark Model...
 2024-12-31 14:16:24 | INFO | 
-开始训练基准LSTM模型...
-2024-12-31 14:16:24 | INFO | 配置信息: batch_size=64, epochs=100
-2024-12-31 14:16:24 | INFO | 当前训练配置: epochs=100, batch_size=64
+Start Training Benchmark LSTM Model...
+2024-12-31 14:16:24 | INFO | Configuration Information: batch_size=64, epochs=100
+2024-12-31 14:16:24 | INFO | Current Training Configuration: epochs=100, batch_size=64
 2024-12-31 14:16:24 | INFO | Training LSTM for 100 epochs
-2024-12-31 14:29:01 | INFO | LSTM基准模型评估结果:
-2024-12-31 14:29:01 | INFO | 实际训练轮数: 50
+2024-12-31 14:29:01 | INFO | LSTM Benchmark Model Evaluation Results:
+2024-12-31 14:29:01 | INFO | Actual Training Rounds: 50
 2024-12-31 14:29:01 | INFO | RMSE: 0.9850
 2024-12-31 14:29:01 | INFO | MAE: 0.8000
 2024-12-31 14:29:01 | INFO | R2: -0.0202
 2024-12-31 14:29:01 | INFO | MAPE: 1437.0128
 2024-12-31 14:29:03 | INFO | 
-开始训练基准GRU模型...
-2024-12-31 14:29:03 | INFO | 配置信息: batch_size=64, epochs=100
-2024-12-31 14:29:03 | INFO | 当前训练配置: epochs=100, batch_size=64
+Start Training Benchmark GRU Model...
+2024-12-31 14:29:03 | INFO | Configuration Information: batch_size=64, epochs=100
+2024-12-31 14:29:03 | INFO | Current Training Configuration: epochs=100, batch_size=64
 2024-12-31 14:29:03 | INFO | Training GRU for 100 epochs
-2024-12-31 14:42:28 | INFO | GRU基准模型评估结果:
-2024-12-31 14:42:28 | INFO | 实际训练轮数: 63
+2024-12-31 14:42:28 | INFO | GRU Benchmark Model Evaluation Results:
+2024-12-31 14:42:28 | INFO | Actual Training Rounds: 63
 2024-12-31 14:42:28 | INFO | RMSE: 1.0914
 2024-12-31 14:42:28 | INFO | MAE: 0.8768
 2024-12-31 14:42:28 | INFO | R2: -0.2523
 2024-12-31 14:42:28 | INFO | MAPE: 1119.8158
 2024-12-31 14:42:29 | INFO | 
-开始训练基准CNN_LSTM模型...
-2024-12-31 14:42:29 | INFO | 配置信息: batch_size=64, epochs=100
-2024-12-31 14:42:29 | INFO | 当前训练配置: epochs=100, batch_size=64
+Start Training Benchmark CNN_LSTM Model...
+2024-12-31 14:42:29 | INFO | Configuration Information: batch_size=64, epochs=100
+2024-12-31 14:42:29 | INFO | Current Training Configuration: epochs=100, batch_size=64
 2024-12-31 14:42:30 | INFO | Training CNN_LSTM for 100 epochs
-2024-12-31 14:43:41 | INFO | CNN_LSTM基准模型评估结果:
-2024-12-31 14:43:41 | INFO | 实际训练轮数: 32
+2024-12-31 14:43:41 | INFO | CNN_LSTM Benchmark Model Evaluation Results:
+2024-12-31 14:43:41 | INFO | Actual Training Rounds: 32
 2024-12-31 14:43:41 | INFO | RMSE: 0.9832
 2024-12-31 14:43:41 | INFO | MAE: 0.7237
 2024-12-31 14:43:41 | INFO | R2: -0.0165
 2024-12-31 14:43:41 | INFO | MAPE: 656.3343
 2024-12-31 14:43:43 | INFO | 
-开始训练增强模型...
+Start Training Enhanced Model...
 2024-12-31 14:43:43 | INFO | 
-开始训练增强LSTM模型(包含天气特征)...
-2024-12-31 14:43:43 | INFO | 配置信息: batch_size=64, epochs=100
-2024-12-31 14:43:43 | INFO | 当前训练配置: epochs=100, batch_size=64
-2024-12-31 14:43:43 | INFO | Before training - epochs value: 100
+Start Training Enhanced LSTM Model (Including Weather Features)...
+2024-12-31 14:43:43 | INFO | Configuration Information: batch_size=64, epochs=100
+2024-12-31 14:43:43 | INFO | Current Training Configuration: epochs=100, batch_size=64
+2024-12-31 14:43:43 | INFO | Before Training - epochs value: 100
 2024-12-31 14:43:43 | INFO | Training LSTM for 100 epochs
-2024-12-31 14:48:11 | INFO | After training - epochs value: 100
-2024-12-31 14:48:12 | INFO | LSTM增强模型评估结果:
-2024-12-31 14:48:12 | INFO | 实际训练轮数: 31
+2024-12-31 14:48:11 | INFO | After Training - epochs value: 100
+2024-12-31 14:48:12 | INFO | LSTM Enhanced Model Evaluation Results:
+2024-12-31 14:48:12 | INFO | Actual Training Rounds: 31
 2024-12-31 14:48:12 | INFO | RMSE: 0.8818
 2024-12-31 14:48:12 | INFO | MAE: 0.6185
 2024-12-31 14:48:12 | INFO | R2: 0.1825
 2024-12-31 14:48:12 | INFO | MAPE: 471.1180
 2024-12-31 14:48:13 | INFO | 
-开始训练增强GRU模型(包含天气特征)...
-2024-12-31 14:48:13 | INFO | 配置信息: batch_size=64, epochs=100
-2024-12-31 14:48:13 | INFO | 当前训练配置: epochs=100, batch_size=64
-2024-12-31 14:48:14 | INFO | Before training - epochs value: 100
+Start Training Enhanced GRU Model (Including Weather Features)...
+2024-12-31 14:48:13 | INFO | Configuration Information: batch_size=64, epochs=100
+2024-12-31 14:48:13 | INFO | Current Training Configuration: epochs=100, batch_size=64
+2024-12-31 14:48:14 | INFO | Before Training - epochs value: 100
 2024-12-31 14:48:14 | INFO | Training GRU for 100 epochs
-2024-12-31 15:05:14 | INFO | After training - epochs value: 100
-2024-12-31 15:05:15 | INFO | GRU增强模型评估结果:
-2024-12-31 15:05:15 | INFO | 实际训练轮数: 75
+2024-12-31 15:05:14 | INFO | After Training - epochs value: 100
+2024-12-31 15:05:15 | INFO | GRU Enhanced Model Evaluation Results:
+2024-12-31 15:05:15 | INFO | Actual Training Rounds: 75
 2024-12-31 15:05:15 | INFO | RMSE: 0.5044
 2024-12-31 15:05:15 | INFO | MAE: 0.3701
 2024-12-31 15:05:15 | INFO | R2: 0.7325
 2024-12-31 15:05:15 | INFO | MAPE: 626.6619
 2024-12-31 15:05:17 | INFO | 
-开始训练增强CNN_LSTM模型(包含天气特征)...
-2024-12-31 15:05:17 | INFO | 配置信息: batch_size=64, epochs=100
-2024-12-31 15:05:17 | INFO | 当前训练配置: epochs=100, batch_size=64
-2024-12-31 15:05:17 | INFO | Before training - epochs value: 100
+Start Training Enhanced CNN_LSTM Model (Including Weather Features)...
+2024-12-31 15:05:17 | INFO | Configuration Information: batch_size=64, epochs=100
+2024-12-31 15:05:17 | INFO | Current Training Configuration: epochs=100, batch_size=64
+2024-12-31 15:05:17 | INFO | Before Training - epochs value: 100
 2024-12-31 15:05:17 | INFO | Training CNN_LSTM for 100 epochs
-2024-12-31 15:07:53 | INFO | After training - epochs value: 100
-2024-12-31 15:07:54 | INFO | CNN_LSTM增强模型评估结果:
-2024-12-31 15:07:54 | INFO | 实际训练轮数: 60
+2024-12-31 15:07:53 | INFO | After Training - epochs value: 100
+2024-12-31 15:07:54 | INFO | CNN_LSTM Enhanced Model Evaluation Results:
+2024-12-31 15:07:54 | INFO | Actual Training Rounds: 60
 2024-12-31 15:07:54 | INFO | RMSE: 0.5728
 2024-12-31 15:07:54 | INFO | MAE: 0.4316
 2024-12-31 15:07:54 | INFO | R2: 0.6550
 2024-12-31 15:07:54 | INFO | MAPE: 566.0583
 2024-12-31 15:07:56 | INFO | 
-模型性能提升:
+Model Performance Improvement:
 2024-12-31 15:07:56 | INFO | 
-LSTM模型改进:
-2024-12-31 15:07:56 | INFO | RMSE_improvement: 10.48%
-2024-12-31 15:07:56 | INFO | MAE_improvement: 22.69%
-2024-12-31 15:07:56 | INFO | R2_improvement: 20.27%
-2024-12-31 15:07:56 | INFO | MAPE_improvement: 67.22%
+LSTM Model Improvement:
+2024-12-31 15:07:56 | INFO | RMSE Improvement: 10.48%
+2024-12-31 15:07:56 | INFO | MAE Improvement: 22.69%
+2024-12-31 15:07:56 | INFO | R2 Improvement: 20.27%
+2024-12-31 15:07:56 | INFO | MAPE Improvement: 67.22%
 2024-12-31 15:07:56 | INFO | 
-GRU模型改进:
-2024-12-31 15:07:56 | INFO | RMSE_improvement: 53.78%
-2024-12-31 15:07:56 | INFO | MAE_improvement: 57.79%
-2024-12-31 15:07:56 | INFO | R2_improvement: 98.48%
-2024-12-31 15:07:56 | INFO | MAPE_improvement: 44.04%
+GRU Model Improvement:
+2024-12-31 15:07:56 | INFO | RMSE Improvement: 53.78%
+2024-12-31 15:07:56 | INFO | MAE Improvement: 57.79%
+2024-12-31 15:07:56 | INFO | R2 Improvement: 98.48%
+2024-12-31 15:07:56 | INFO | MAPE Improvement: 44.04%
+LSTM Model Improvement:
+2024-12-31 15:07:56 | INFO | RMSE Improvement: 10.48%
+2024-12-31 15:07:56 | INFO | MAE Improvement: 22.69%
+2024-12-31 15:07:56 | INFO | R2 Improvement: 20.27%
+2024-12-31 15:07:56 | INFO | MAPE Improvement: 67.22%
 2024-12-31 15:07:56 | INFO | 
-CNN_LSTM模型改进:
-2024-12-31 15:07:56 | INFO | RMSE_improvement: 41.74%
-2024-12-31 15:07:56 | INFO | MAE_improvement: 40.36%
-2024-12-31 15:07:56 | INFO | R2_improvement: 67.15%
-2024-12-31 15:07:56 | INFO | MAPE_improvement: 13.75%
+GRU Model Improvement:
+2024-12-31 15:07:56 | INFO | RMSE Improvement: 53.78%
+2024-12-31 15:07:56 | INFO | MAE Improvement: 57.79%
+2024-12-31 15:07:56 | INFO | R2 Improvement: 98.48%
+2024-12-31 15:07:56 | INFO | MAPE Improvement: 44.04%
 2024-12-31 15:07:56 | INFO | 
-实验完成，总耗时: 0:51:33.971644
+CNN_LSTM Model Improvement:
+2024-12-31 15:07:56 | INFO | RMSE Improvement: 41.74%
+2024-12-31 15:07:56 | INFO | MAE Improvement: 40.36%
+2024-12-31 15:07:56 | INFO | R2 Improvement: 67.15%
+2024-12-31 15:07:56 | INFO | MAPE Improvement: 13.75%
 2024-12-31 15:07:56 | INFO | 
-实验结果：
+Experiment Completed, Total Duration: 0:51:33.971644
 2024-12-31 15:07:56 | INFO | 
-LSTM模型:
-2024-12-31 15:07:56 | INFO | 基准模型性能：
+Experiment Results:
+2024-12-31 15:07:56 | INFO | 
+LSTM Model:
+2024-12-31 15:07:56 | INFO | Baseline Model Performance:
 2024-12-31 15:07:56 | INFO | RMSE: 0.9850
 2024-12-31 15:07:56 | INFO | MAE: 0.8000
 2024-12-31 15:07:56 | INFO | R2: -0.0202
 2024-12-31 15:07:56 | INFO | MAPE: 1437.0128
 2024-12-31 15:07:56 | INFO | 
-增强模型性能：
+Enhanced Model Performance:
 2024-12-31 15:07:56 | INFO | RMSE: 0.8818
 2024-12-31 15:07:56 | INFO | MAE: 0.6185
 2024-12-31 15:07:56 | INFO | R2: 0.1825
 2024-12-31 15:07:56 | INFO | MAPE: 471.1180
 2024-12-31 15:07:56 | INFO | 
-性能提升：
-2024-12-31 15:07:56 | INFO | RMSE_improvement: 10.48%
-2024-12-31 15:07:56 | INFO | MAE_improvement: 22.69%
-2024-12-31 15:07:56 | INFO | R2_improvement: 20.27%
-2024-12-31 15:07:56 | INFO | MAPE_improvement: 67.22%
+Performance Improvement:
+2024-12-31 15:07:56 | INFO | RMSE Improvement: 10.48%
+2024-12-31 15:07:56 | INFO | MAE Improvement: 22.69%
+2024-12-31 15:07:56 | INFO | R2 Improvement: 20.27%
+2024-12-31 15:07:56 | INFO | MAPE Improvement: 67.22%
 2024-12-31 15:07:56 | INFO | 
-GRU模型:
-2024-12-31 15:07:56 | INFO | 基准模型性能：
+GRU Model:
+2024-12-31 15:07:56 | INFO | Baseline Model Performance:
 2024-12-31 15:07:56 | INFO | RMSE: 1.0914
 2024-12-31 15:07:56 | INFO | MAE: 0.8768
 2024-12-31 15:07:56 | INFO | R2: -0.2523
 2024-12-31 15:07:56 | INFO | MAPE: 1119.8158
 2024-12-31 15:07:56 | INFO | 
-增强模型性能：
+Enhanced Model Performance:
 2024-12-31 15:07:56 | INFO | RMSE: 0.5044
 2024-12-31 15:07:56 | INFO | MAE: 0.3701
 2024-12-31 15:07:56 | INFO | R2: 0.7325
 2024-12-31 15:07:56 | INFO | MAPE: 626.6619
 2024-12-31 15:07:56 | INFO | 
-性能提升：
-2024-12-31 15:07:56 | INFO | RMSE_improvement: 53.78%
-2024-12-31 15:07:56 | INFO | MAE_improvement: 57.79%
-2024-12-31 15:07:56 | INFO | R2_improvement: 98.48%
-2024-12-31 15:07:56 | INFO | MAPE_improvement: 44.04%
+Performance Improvement:
+2024-12-31 15:07:56 | INFO | RMSE Improvement: 53.78%
+2024-12-31 15:07:56 | INFO | MAE Improvement: 57.79%
+2024-12-31 15:07:56 | INFO | R2 Improvement: 98.48%
+2024-12-31 15:07:56 | INFO | MAPE Improvement: 44.04%
 2024-12-31 15:07:56 | INFO | 
-CNN_LSTM模型:
-2024-12-31 15:07:56 | INFO | 基准模型性能：
+CNN_LSTM Model:
+2024-12-31 15:07:56 | INFO | Baseline Model Performance:
 2024-12-31 15:07:56 | INFO | RMSE: 0.9832
 2024-12-31 15:07:56 | INFO | MAE: 0.7237
 2024-12-31 15:07:56 | INFO | R2: -0.0165
 2024-12-31 15:07:56 | INFO | MAPE: 656.3343
 2024-12-31 15:07:56 | INFO | 
-增强模型性能：
+Enhanced Model Performance:
 2024-12-31 15:07:56 | INFO | RMSE: 0.5728
 2024-12-31 15:07:56 | INFO | MAE: 0.4316
 2024-12-31 15:07:56 | INFO | R2: 0.6550
 2024-12-31 15:07:56 | INFO | MAPE: 566.0583
 2024-12-31 15:07:56 | INFO | 
-性能提升：
-2024-12-31 15:07:56 | INFO | RMSE_improvement: 41.74%
-2024-12-31 15:07:56 | INFO | MAE_improvement: 40.36%
-2024-12-31 15:07:56 | INFO | R2_improvement: 67.15%
-2024-12-31 15:07:56 | INFO | MAPE_improvement: 13.75%
+Performance Improvement:
+2024-12-31 15:07:56 | INFO | RMSE Improvement: 41.74%
+2024-12-31 15:07:56 | INFO | MAE Improvement: 40.36%
+2024-12-31 15:07:56 | INFO | R2 Improvement: 67.15%
+2024-12-31 15:07:56 | INFO | MAPE Improvement: 13.75%
 2024-12-31 15:07:56 | INFO | 
-开始生成可视化结果...
-2024-12-31 15:08:07 | INFO | 可视化结果生成完成
+Starting to Generate Visualization Results...
+2024-12-31 15:08:07 | INFO | Visualization Results Generation Completed
 2024-12-31 15:08:07 | INFO | 
-实验配置和结果摘要已保存至: logs/summary_20241231_150807.txt
+Experiment Configuration and Results Summary Saved to: logs/summary_20241231_150807.txt
 2024-12-31 15:08:07 | INFO | 
 ------------------------------
-2024-12-31 15:08:07 | INFO | 实验全部完成
+2024-12-31 15:08:07 | INFO | Experiment Fully Completed
 2024-12-31 15:08:07 | INFO | ------------------------------

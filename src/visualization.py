@@ -26,7 +26,7 @@ class DataVisualizer:
         self.results_dir = RESULTS_DIR
         self.figures_dir = os.path.join(self.results_dir, 'figures')
         
-        # 创建所有必要的子目录
+        # Create all necessary subdirectories
         self.subdirs = {
             'analysis': os.path.join(self.figures_dir, 'analysis'),
             'comparison': os.path.join(self.figures_dir, 'comparison'),
@@ -36,18 +36,18 @@ class DataVisualizer:
             'weather': os.path.join(self.figures_dir, 'weather')
         }
         
-        # 创建目录
+        # Create directories
         for dir_path in self.subdirs.values():
             os.makedirs(dir_path, exist_ok=True)
         
     def plot_traffic_patterns(self, traffic_data, save_path):
-        """可视化交通流量模式
+        """Visualize traffic flow patterns
         
         Args:
-            traffic_data: 交通数据DataFrame
-            save_path: 保存路径
+            traffic_data: Traffic data DataFrame
+            save_path: Save path
         """
-        # 1. 日内交通流量模式
+        # 1. Daily traffic flow pattern
         plt.figure(figsize=(15, 10))
         
         plt.subplot(2, 1, 1)
@@ -58,7 +58,7 @@ class DataVisualizer:
         plt.ylabel('Average Traffic Flow')
         plt.grid(True)
         
-        # 2. 周内交通流量模式
+        # 2. Weekly traffic flow pattern
         plt.subplot(2, 1, 2)
         weekly_pattern = traffic_data.groupby(traffic_data.index.dayofweek).mean().mean(axis=1)
         days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -73,10 +73,10 @@ class DataVisualizer:
         plt.savefig(os.path.join(save_path, 'traffic_patterns.png'), dpi=300, bbox_inches='tight')
         plt.close()
         
-        # 3. 交通流量热力图
+        # 3. Traffic flow heatmap
         plt.figure(figsize=(15, 6))
         sensor_means = traffic_data.mean()
-        sensor_matrix = sensor_means.values.reshape(23, 9)  # 调整形状以获得更好的可视化效果
+        sensor_matrix = sensor_means.values.reshape(23, 9)  # Adjust shape for better visualization
         
         sns.heatmap(sensor_matrix, 
                     cmap='YlOrRd',
@@ -90,13 +90,13 @@ class DataVisualizer:
         plt.close()
     
     def plot_weather_analysis(self, weather_data, save_path):
-        """可视化天气数据分析
+        """Visualize weather data analysis
         
         Args:
-            weather_data: 天气数据DataFrame
-            save_path: 保存路径
+            weather_data: Weather data DataFrame
+            save_path: Save path
         """
-        # 1. 温度变化趋势
+        # 1. Temperature variation trend
         plt.figure(figsize=(15, 10))
         
         plt.subplot(2, 1, 1)
@@ -108,16 +108,16 @@ class DataVisualizer:
         plt.legend()
         plt.grid(True)
         
-        # 2. 降水和湿度关系 - 改进版
+        # 2. Precipitation and humidity relationship - improved version
         plt.subplot(2, 1, 2)
         
-        # 创建湿度区间
+        # Create humidity intervals
         humidity_bins = pd.qcut(weather_data['RHAV'], q=10)
         
-        # 计算每个湿度区间的平均降水量
+        # Calculate average precipitation for each humidity interval
         avg_precip = weather_data.groupby(humidity_bins)['PRCP'].agg(['mean', 'std', 'count'])
         
-        # 绘制带误差条的柱状图
+        # Plot bar chart with error bars
         x = np.arange(len(avg_precip))
         plt.bar(x, avg_precip['mean'], 
                 yerr=avg_precip['std'],
@@ -126,12 +126,12 @@ class DataVisualizer:
                 color='skyblue',
                 label='Average Precipitation')
         
-        # 添加趋势线
+        # Add trend line
         z = np.polyfit(x, avg_precip['mean'], 1)
         p = np.poly1d(z)
         plt.plot(x, p(x), "r--", alpha=0.8, label='Trend Line')
         
-        # 设置x轴标签
+        # Set x-axis labels
         plt.xticks(x, [f'{int(bin.left)}-{int(bin.right)}' for bin in avg_precip.index],
                    rotation=45)
         
@@ -141,7 +141,7 @@ class DataVisualizer:
         plt.legend()
         plt.grid(True, alpha=0.3)
         
-        # 添加相关系数注释
+        # Add correlation coefficient annotation
         corr = weather_data['PRCP'].corr(weather_data['RHAV'])
         plt.text(0.02, 0.98, f'Correlation: {corr:.2f}',
                  transform=plt.gca().transAxes,
@@ -152,7 +152,7 @@ class DataVisualizer:
         plt.savefig(os.path.join(save_path, 'weather_patterns.png'), dpi=300, bbox_inches='tight')
         plt.close()
         
-        # 3. 风速和风向分布
+        # 3. Wind speed and direction distribution
         plt.figure(figsize=(15, 6))
         
         plt.subplot(1, 2, 1)
@@ -172,31 +172,31 @@ class DataVisualizer:
         plt.close()
     
     def plot_weather_impact(self, weather_data, traffic_data, save_path=None):
-        """可视化天气对交通的影响"""
+        """Visualize weather impact on traffic"""
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=self.figure_size)
         
-        # 计算平均交通流量
+        # Calculate average traffic flow
         avg_traffic = traffic_data.mean(axis=1)
         
-        # 温度与交通流量
+        # Temperature vs traffic flow
         ax1.scatter(weather_data['TMAX'], avg_traffic, alpha=0.5)
         ax1.set_title('Temperature vs Traffic Flow')
         ax1.set_xlabel('Temperature')
         ax1.set_ylabel('Average Traffic Flow')
         
-        # 降水与交通流量
+        # Precipitation vs traffic flow
         ax2.scatter(weather_data['PRCP'], avg_traffic, alpha=0.5)
         ax2.set_title('Precipitation vs Traffic Flow')
         ax2.set_xlabel('Precipitation')
         ax2.set_ylabel('Average Traffic Flow')
         
-        # 风速与交通流量
+        # Wind speed vs traffic flow
         ax3.scatter(weather_data['AWND'], avg_traffic, alpha=0.5)
         ax3.set_title('Wind Speed vs Traffic Flow')
         ax3.set_xlabel('Wind Speed')
         ax3.set_ylabel('Average Traffic Flow')
         
-        # 湿度与交通流量
+        # Humidity vs traffic flow
         ax4.scatter(weather_data['RHAV'], avg_traffic, alpha=0.5)
         ax4.set_title('Humidity vs Traffic Flow')
         ax4.set_xlabel('Relative Humidity')
@@ -210,11 +210,11 @@ class DataVisualizer:
         return fig
     
     def plot_model_performance(self, history_dict, save_path=None):
-        """可视化模型训练过程"""
+        """Visualize model training process"""
         fig = plt.figure(figsize=(15, 12))
         gs = gridspec.GridSpec(3, 2, figure=fig)
         
-        # 训练损失
+        # Training loss
         ax1 = fig.add_subplot(gs[0, 0])
         for model_name, history in history_dict.items():
             ax1.plot(history.history['loss'], label=f'{model_name}_train')
@@ -223,7 +223,7 @@ class DataVisualizer:
         ax1.set_ylabel('Loss')
         ax1.legend()
         
-        # 验证损失
+        # Validation loss
         ax2 = fig.add_subplot(gs[0, 1])
         for model_name, history in history_dict.items():
             ax2.plot(history.history['val_loss'], label=f'{model_name}_val')
@@ -268,7 +268,7 @@ class DataVisualizer:
         ax5.set_ylabel('MAPE')
         ax5.legend()
         
-        # 学习率变化
+        # Learning rate changes
         ax6 = fig.add_subplot(gs[2, 1])
         for model_name, history in history_dict.items():
             if 'lr' in history.history:
@@ -286,12 +286,12 @@ class DataVisualizer:
         return fig
     
     def plot_prediction_comparison(self, y_true, predictions_dict, save_path=None):
-        """可视化不同模型的预测结果对比"""
-        # 确保保存目录存在
+        """Visualize prediction comparison between different models"""
+        # Ensure save directory exists
         if save_path:
             os.makedirs(save_path, exist_ok=True)
         
-        # 1. 预测值与实际值对比
+        # 1. Prediction vs actual values comparison
         plt.figure(figsize=(12, 8))
         plt.plot(y_true[:100], 'k-', label='Actual', alpha=0.7)
         for model_name, pred in predictions_dict.items():
@@ -306,7 +306,7 @@ class DataVisualizer:
             plt.savefig(os.path.join(save_path, 'prediction_vs_actual.png'), dpi=300)
             plt.close()
         
-        # 2. 误差分布
+        # 2. Error distribution
         plt.figure(figsize=(12, 8))
         for model_name, pred in predictions_dict.items():
             errors = y_true - pred
@@ -321,7 +321,7 @@ class DataVisualizer:
             plt.savefig(os.path.join(save_path, 'error_distribution.png'), dpi=300)
             plt.close()
         
-        # 3. 预测散点图
+        # 3. Prediction scatter plot
         plt.figure(figsize=(12, 8))
         for model_name, pred in predictions_dict.items():
             plt.scatter(y_true, pred, alpha=0.5, label=model_name)
@@ -336,7 +336,7 @@ class DataVisualizer:
             plt.savefig(os.path.join(save_path, 'prediction_scatter.png'), dpi=300)
             plt.close()
         
-        # 4. 累积误差
+        # 4. Cumulative error
         plt.figure(figsize=(12, 8))
         for model_name, pred in predictions_dict.items():
             cum_error = np.cumsum(np.abs(y_true - pred))
@@ -352,8 +352,8 @@ class DataVisualizer:
             plt.close()
     
     def plot_model_comparison(self, baseline_results, enhanced_results, results_dir, metrics=['RMSE', 'MAE', 'R2', 'MAPE']):
-        """绘制基础模型和增强模型的性能对比图"""
-        # 确保目录存在
+        """Plot performance comparison between baseline and enhanced models"""
+        # Ensure directory exists
         os.makedirs(results_dir, exist_ok=True)
         
         for metric in metrics:
@@ -379,8 +379,8 @@ class DataVisualizer:
             plt.close()
     
     def plot_model_improvements(self, baseline_metrics, enhanced_metrics, save_path):
-        """绘制模型改进对比图"""
-        # 1. 性能提升热力图
+        """Plot model improvement comparison"""
+        # 1. Performance improvement heatmap
         plt.figure(figsize=(12, 8))
         improvements = {}
         models = ['LSTM', 'GRU', 'CNN_LSTM']
@@ -423,10 +423,10 @@ class DataVisualizer:
             plt.close()
     
     def plot_feature_importance_analysis(self, model, feature_names, save_path):
-        """可视化特征重要性分析"""
+        """Visualize feature importance analysis"""
         plt.figure(figsize=(12, 6))
         
-        # 使用模型的权重来分析特征重要性
+        # Use model weights to analyze feature importance
         weights = []
         for layer in model.layers:
             if 'dense' in layer.name.lower():
@@ -434,24 +434,24 @@ class DataVisualizer:
                 weights.append(np.abs(w).mean(axis=1))
         
         if weights:
-            # 计算平均特征重要性
+            # Calculate average feature importance
             importance_scores = np.abs(weights[0])
             
-            # 确保特征名称和重要性分数长度匹配
+            # Ensure feature names and importance scores match in length
             min_len = min(len(feature_names), len(importance_scores))
             feature_names = feature_names[:min_len]
             importance_scores = importance_scores[:min_len]
             
-            # 创建特征重要性数据框
+            # Create feature importance dataframe
             importance_df = pd.DataFrame({
                 'Feature': feature_names,
                 'Importance': importance_scores
             })
             
-            # 按重要性排序
+            # Sort by importance
             importance_df = importance_df.sort_values('Importance', ascending=False)
             
-            # 绘制前15最重要的特征（由于我们减少了特征数量）
+            # Plot top 15 most important features (since we reduced feature count)
             plt.figure(figsize=(12, 6))
             top_n = min(15, len(importance_df))
             sns.barplot(data=importance_df.head(top_n), 
@@ -512,11 +512,11 @@ class DataVisualizer:
         plt.close()
     
     def plot_weather_impact_analysis(self, baseline_results, enhanced_results, weather_data):
-        """可视化天气对预测性能的影响"""
+        """Visualize weather impact on prediction performance"""
         fig = plt.figure(figsize=(15, 10))
         gs = gridspec.GridSpec(2, 2)
         
-        # 1. 不同天气条件下的预测误差对比
+        # 1. Prediction error comparison under different weather conditions
         ax1 = plt.subplot(gs[0, 0])
         self._plot_weather_condition_comparison(
             baseline_results,
@@ -525,7 +525,7 @@ class DataVisualizer:
             ax1
         )
         
-        # 2. 极端天气事件分析
+        # 2. Extreme weather event analysis
         ax2 = plt.subplot(gs[0, 1])
         self._plot_extreme_weather_analysis(
             baseline_results,
@@ -534,7 +534,7 @@ class DataVisualizer:
             ax2
         )
         
-        # 3. 天气特征重要性分析
+        # 3. Weather feature importance analysis
         ax3 = plt.subplot(gs[1, 0])
         self._plot_weather_feature_importance(
             enhanced_results,
@@ -542,7 +542,7 @@ class DataVisualizer:
             ax3
         )
         
-        # 4. 性能提升统计
+        # 4. Performance improvement statistics
         ax4 = plt.subplot(gs[1, 1])
         self._plot_performance_improvement(
             baseline_results,
@@ -554,7 +554,7 @@ class DataVisualizer:
         return fig
     
     def create_performance_table(self, baseline_metrics, enhanced_metrics, improvements, save_path):
-        """创建性能对比表格"""
+        """Create performance comparison table"""
         table_data = []
         
         for model in baseline_metrics.keys():
@@ -574,7 +574,7 @@ class DataVisualizer:
         
         df = pd.DataFrame(table_data)
         
-        # 创建表格可视化
+        # Create table visualization
         plt.figure(figsize=(15, 5))
         plt.axis('off')
         
@@ -586,12 +586,12 @@ class DataVisualizer:
             bbox=[0, 0, 1, 1]
         )
         
-        # 调整表格样式
+        # Adjust table style
         table.auto_set_font_size(False)
         table.set_fontsize(9)
         table.scale(1.2, 1.5)
         
-        # 保存表格到comparison文件夹
+        # Save table to comparison folder
         plt.savefig(os.path.join(self.subdirs['comparison'], 'performance_table.png'), 
                     dpi=300, 
                     bbox_inches='tight',
@@ -599,16 +599,16 @@ class DataVisualizer:
         plt.close()
     
     def plot_traffic_time_analysis(self, traffic_data, save_path):
-        """交通数据的时序特征分析"""
+        """Time series feature analysis of traffic data"""
         plt.figure(figsize=(15, 12))
         
-        # 1. 交通流量的季节性分解
-        # 选择一个型的传感器
+        # 1. Traffic flow seasonal decomposition
+        # Select a representative sensor
         sample_sensor = traffic_data.iloc[:, 0]
-        decomposition = seasonal_decompose(sample_sensor, period=24*12)  # 12小时为周期
+        decomposition = seasonal_decompose(sample_sensor, period=24*12)  # 12 hours as period
         
         plt.subplot(4, 1, 1)
-        plt.plot(sample_sensor[:24*7])  # 示一周的数据
+        plt.plot(sample_sensor[:24*7])  # Show one week of data
         plt.title('Original Traffic Flow')
         plt.grid(True)
         
@@ -631,7 +631,7 @@ class DataVisualizer:
         plt.savefig(os.path.join(save_path, 'traffic_time_decomposition.png'), dpi=300)
         plt.close()
         
-        # 2. 交通流量的自相关分析
+        # 2. Traffic flow autocorrelation analysis
         plt.figure(figsize=(15, 6))
         
         plt.subplot(1, 2, 1)
@@ -647,11 +647,11 @@ class DataVisualizer:
         plt.close()
     
     def plot_weather_correlation_analysis(self, weather_data, save_path):
-        """天气数据的相分析"""
-        # 1. 天气特征相关性热力图
+        """Weather data correlation analysis"""
+        # 1. Weather feature correlation heatmap
         plt.figure(figsize=(12, 10))
         
-        # 选择主要的天气特征进行相关性分析
+        # Select main weather features for correlation analysis
         main_features = ['TMAX', 'TMIN', 'PRCP', 'AWND', 'RHAV', 'RHMN', 'RHMX']
         weather_corr = weather_data[main_features].corr()
         
@@ -668,7 +668,7 @@ class DataVisualizer:
         plt.savefig(os.path.join(save_path, 'weather_correlation.png'), dpi=300)
         plt.close()
         
-        # 2. 主要天气特征的分布分析（拆分成4个子图）
+        # 2. Distribution analysis of main weather features (split into 4 subgraphs)
         fig, axes = plt.subplots(2, 2, figsize=(15, 15))
         features = ['TMAX', 'PRCP', 'AWND', 'RHAV']
         titles = ['Temperature Distribution', 'Precipitation Distribution', 
@@ -679,11 +679,11 @@ class DataVisualizer:
             col = idx % 2
             ax = axes[row, col]
             
-            # 绘制直方图和核密度估计
+            # Draw histograms and kernel density estimates
             sns.histplot(data=weather_data, x=feature, kde=True, ax=ax)
             ax.set_title(title, fontsize=12)
             
-            # 添加基本统计信息
+            # Add basic statistics
             stats_text = f'Mean: {weather_data[feature].mean():.2f}\n'
             stats_text += f'Std: {weather_data[feature].std():.2f}\n'
             stats_text += f'Min: {weather_data[feature].min():.2f}\n'
@@ -703,18 +703,18 @@ class DataVisualizer:
         plt.close()
     
     def plot_traffic_weather_relationship(self, traffic_data, weather_data, save_path):
-        """分析交通流量与天气的关系"""
-        # 确保存目录存在
+        """Analyze the relationship between traffic flow and weather"""
+        # Make sure the save directory exists
         os.makedirs(save_path, exist_ok=True)
         
-        # 计算每个时间点的平均交通流量
+        # Calculate the average traffic flow at each time point
         avg_traffic = traffic_data.mean(axis=1)
         
-        # 1. 不同温度区间的交通流量箱线图
+        # 1. Boxplot of traffic flow in different temperature ranges
         plt.figure(figsize=(12, 8))
         temp_bins = pd.cut(weather_data['TMAX'], 
-                          bins=5,  # 5个等宽区间
-                          labels=[f'{i+1}' for i in range(5)])  # 使用1-5作为标签
+                          bins=5,  # 5 equal width intervals
+                          labels=[f'{i+1}' for i in range(5)])  # Use 1-5 as labels
         sns.boxplot(x=temp_bins, y=avg_traffic)
         plt.title('Traffic Flow Distribution by Temperature Range')
         plt.xlabel('Temperature Level (1: Coldest, 5: Hottest)')
@@ -723,7 +723,7 @@ class DataVisualizer:
         plt.savefig(os.path.join(save_path, 'traffic_temp_distribution.png'), dpi=300)
         plt.close()
         
-        # 2. 不同降水量级别的交通流量变化
+        # 2. Traffic flow changes in different precipitation levels
         plt.figure(figsize=(12, 8))
         weather_data['rain_category'] = pd.cut(weather_data['PRCP'], 
                                            bins=[-np.inf, 0, 0.1, 1, np.inf],
@@ -739,7 +739,7 @@ class DataVisualizer:
         plt.savefig(os.path.join(save_path, 'traffic_precip_distribution.png'), dpi=300)
         plt.close()
         
-        # 3. 天气条件组合对交通的影响
+        # 3. The impact of weather conditions on traffic
         plt.figure(figsize=(12, 8))
         conditions = ((weather_data['PRCP'] > 0) & 
                      (weather_data['AWND'] > weather_data['AWND'].mean()))
@@ -752,7 +752,7 @@ class DataVisualizer:
         plt.savefig(os.path.join(save_path, 'traffic_combined_conditions.png'), dpi=300)
         plt.close()
         
-        # 4. 时间序列上的天气事件标记
+        # 4. Weather event markers on time series
         plt.figure(figsize=(12, 8))
         plt.plot(avg_traffic.index, avg_traffic, alpha=0.5, label='Traffic Flow')
         extreme_weather = weather_data['PRCP'] > weather_data['PRCP'].quantile(0.95)
@@ -766,39 +766,39 @@ class DataVisualizer:
         plt.ylabel('Traffic Flow')
         plt.legend()
         
-        # 调整x轴标签的显示
-        plt.gcf().autofmt_xdate()  # 自动调整日期标签的角
-        plt.xticks(rotation=45)    # 设置标签旋转角度
+        # Adjust the display of x-axis labels
+        plt.gcf().autofmt_xdate()  # Automatically adjust the angle of the date label
+        plt.xticks(rotation=45)    # Set the label rotation angle
         
         plt.tight_layout()
         plt.savefig(os.path.join(save_path, 'traffic_extreme_events.png'), dpi=300)
         plt.close()
     
     def plot_weather_impact_comparison(self, baseline_metrics, enhanced_metrics, weather_data, save_path):
-        """可视化天气条件对模型性能的影响"""
-        # 确保保存目录存在
+        """Visualize the impact of weather conditions on model performance"""
+        # Make sure the save directory exists
         os.makedirs(save_path, exist_ok=True)
         
-        # 定义高峰时段
-        rush_hours = [7, 8, 9, 17, 18, 19]  # 早晚高峰时段
+        # Define peak hours
+        rush_hours = [7, 8, 9, 17, 18, 19]  # Morning and evening peak hours
         
-        # 为每个模型创建单独的图
+        # Create a separate graph for each model
         for model_name in ['LSTM', 'GRU', 'CNN_LSTM']:
-            # 创建2x2的子图布局
+            # Create a 2x2 subgraph layout
             fig = plt.figure(figsize=(15, 12))
             gs = gridspec.GridSpec(2, 2)
             
-            # 1. RMSE对比
+            # 1. RMSE comparison
             ax1 = fig.add_subplot(gs[0, 0])
             conditions = ['Normal', 'Extreme Weather', 'Rush Hour']
             baseline_rmse = []
             enhanced_rmse = []
             
-            # 正常条件
+            # Normal condition
             baseline_rmse.append(baseline_metrics[model_name]['RMSE'])
             enhanced_rmse.append(enhanced_metrics[model_name]['RMSE'])
             
-            # 极端天气条件
+            # Extreme weather condition
             extreme_weather_mask = (
                 (weather_data['PRCP'] > weather_data['PRCP'].quantile(0.9)) | 
                 (weather_data['AWND'] > weather_data['AWND'].quantile(0.9)) |
@@ -815,7 +815,7 @@ class DataVisualizer:
                 baseline_rmse.append(baseline_metrics[model_name]['RMSE'])
                 enhanced_rmse.append(enhanced_metrics[model_name]['RMSE'])
             
-            # 高峰时段
+            # Rush hour
             rush_hour_mask = weather_data.index.hour.isin(rush_hours)
             if rush_hour_mask.any():
                 baseline_rmse.append(baseline_metrics[model_name].get('rush_hour_RMSE',
@@ -838,13 +838,13 @@ class DataVisualizer:
             ax1.legend()
             ax1.grid(True, alpha=0.3)
             
-            # 添加数值标签
+            # Add value labels
             for i, v in enumerate(baseline_rmse):
                 ax1.text(i - width/2, v, f'{v:.3f}', ha='center', va='bottom')
             for i, v in enumerate(enhanced_rmse):
                 ax1.text(i + width/2, v, f'{v:.3f}', ha='center', va='bottom')
             
-            # 2. MAE对比
+            # 2. MAE comparison
             ax2 = fig.add_subplot(gs[0, 1])
             baseline_mae = []
             enhanced_mae = []
@@ -873,13 +873,13 @@ class DataVisualizer:
             ax2.legend()
             ax2.grid(True, alpha=0.3)
             
-            # 添加数值标签
+            # Add value labels
             for i, v in enumerate(baseline_mae):
                 ax2.text(i - width/2, v, f'{v:.3f}', ha='center', va='bottom')
             for i, v in enumerate(enhanced_mae):
                 ax2.text(i + width/2, v, f'{v:.3f}', ha='center', va='bottom')
             
-            # 3. MAPE对比
+            # 3. MAPE comparison
             ax3 = fig.add_subplot(gs[1, 0])
             baseline_mape = []
             enhanced_mape = []
@@ -908,13 +908,13 @@ class DataVisualizer:
             ax3.legend()
             ax3.grid(True, alpha=0.3)
             
-            # 添加数值标签
+            # Add value labels
             for i, v in enumerate(baseline_mape):
                 ax3.text(i - width/2, v, f'{v:.1f}%', ha='center', va='bottom')
             for i, v in enumerate(enhanced_mape):
                 ax3.text(i + width/2, v, f'{v:.1f}%', ha='center', va='bottom')
             
-            # 4. R2对比
+            # 4. R2 comparison
             ax4 = fig.add_subplot(gs[1, 1])
             baseline_r2 = []
             enhanced_r2 = []
@@ -943,13 +943,13 @@ class DataVisualizer:
             ax4.legend()
             ax4.grid(True, alpha=0.3)
             
-            # 添加数值标签
+            # Add value labels
             for i, v in enumerate(baseline_r2):
                 ax4.text(i - width/2, v, f'{v:.3f}', ha='center', va='bottom')
             for i, v in enumerate(enhanced_r2):
                 ax4.text(i + width/2, v, f'{v:.3f}', ha='center', va='bottom')
             
-            # 设置总标题
+            # Set the overall title
             plt.suptitle(f'{model_name} Model Performance Under Different Conditions', 
                         fontsize=14, y=1.02)
             
@@ -959,12 +959,12 @@ class DataVisualizer:
             plt.close()
             
     def create_comprehensive_report(self, baseline_metrics, enhanced_metrics, weather_data, save_path):
-        """创建综合性能报告"""
-        # 定义颜色和线型
-        colors = ['#1f77b4', '#ff7f0e', '#2ca02c']  # 蓝色、橙色、绿色
+        """Create a comprehensive performance report"""
+        # Define colors and line styles
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c']  # Blue, orange, green
         linestyles = ['-', '--', ':', '-.']
         
-        # 1. 总体性能对比 - 使用2x2子图布局
+        # 1. Overall performance comparison - use 2x2 subgraph layout
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
         fig.suptitle('Performance Metrics Comparison Across Models', fontsize=16, y=1.02)
         
@@ -980,48 +980,48 @@ class DataVisualizer:
         index = np.arange(len(models))
         
         def add_value_labels(ax, bars):
-            """为柱状图添加数值标签"""
+            """Add value labels to the bar chart"""
             for bar in bars:
                 height = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width()/2., height,
                         f'{height:.3f}',
                         ha='center', va='bottom')
         
-        # 使用与weather_impact_conditions相同的颜色
-        baseline_color = '#2E86C1'  # 深蓝色
-        enhanced_color = '#28B463'  # 深绿色
+        # Use the same colors as weather_impact_conditions
+        baseline_color = '#2E86C1'  # Dark blue
+        enhanced_color = '#28B463'  # Dark green
         
-        # 绘制每个指标的子图
+        # Draw a subgraph for each metric
         for metric_name, metric_info in metrics.items():
             ax = metric_info['ax']
             
-            # 获取基准值和增强值
+            # Get the baseline and enhanced values
             baseline_values = [baseline_metrics[model][metric_name] for model in models]
             enhanced_values = [enhanced_metrics[model][metric_name] for model in models]
             
-            # 绘制柱状图
+            # Draw the bar chart
             bars1 = ax.bar(index - bar_width/2, baseline_values, width=bar_width,
                           label='Baseline', color=baseline_color, alpha=0.8)
             bars2 = ax.bar(index + bar_width/2, enhanced_values, width=bar_width,
                           label='Enhanced', color=enhanced_color, alpha=0.8)
             
-            # 添加数值标签
+            # Add value labels
             add_value_labels(ax, bars1)
             add_value_labels(ax, bars2)
             
-            # 设置图表属性
+            # Set chart properties
             ax.set_title(metric_info['title'], fontsize=12, pad=10)
             ax.set_xticks(index)
             ax.set_xticklabels(models, rotation=45)
             ax.legend(loc='upper right')
             ax.grid(True, alpha=0.3)
             
-            # 设置y轴范围，确保从0开始
-            if metric_name != 'R2':  # R2分数可以为负，所以不从0开始
+            # Set y-axis range to start from 0
+            if metric_name != 'R2':  # R2 score can be negative, so don't start from 0
                 ymin, ymax = ax.get_ylim()
-                ax.set_ylim(0, ymax * 1.1)  # 留出10%的空间显示数值标签
+                ax.set_ylim(0, ymax * 1.1)  # Leave 10% space to display value labels
             
-            # 添加y轴标签
+            # Add y-axis label
             if metric_name == 'MAPE':
                 ax.set_ylabel('MAPE (%)')
             else:
@@ -1029,23 +1029,23 @@ class DataVisualizer:
         
         plt.tight_layout()
         
-        # 保存图表到comparison文件夹
+        # Save the chart to the comparison folder
         plt.savefig(os.path.join(self.subdirs['comparison'], 'performance_metrics.png'), 
                     dpi=300, bbox_inches='tight')
         plt.close()
     
     def plot_training_history(self, history, model_name, save_path):
-        """绘制训练历史"""
+        """Plot the training history"""
         metrics = ['loss', 'mae', 'mape', 'rmse', 'r2']
         plt.figure(figsize=VISUALIZATION_CONFIG['figure_size'])
         
-        # 记录学习率变化
+        # Record the change of learning rate
         lr_history = []
         for i in range(len(history.history['loss'])):
             lr = tf.keras.backend.get_value(history.model.optimizer.lr)
             lr_history.append(lr)
         
-        # 绘制损失
+        # Plot the loss
         plt.figure(figsize=VISUALIZATION_CONFIG['figure_size'])
         plt.plot(history.history['loss'], label='Training Loss')
         plt.plot(history.history['val_loss'], label='Validation Loss')
@@ -1057,7 +1057,7 @@ class DataVisualizer:
         plt.savefig(os.path.join(save_path, f'{model_name}_loss.png'), dpi=300, bbox_inches='tight')
         plt.close()
         
-        # 绘制MAE
+        # Plot the MAE
         plt.figure(figsize=VISUALIZATION_CONFIG['figure_size'])
         plt.plot(history.history['mae'], label='Training MAE')
         plt.plot(history.history['val_mae'], label='Validation MAE')
@@ -1069,7 +1069,7 @@ class DataVisualizer:
         plt.savefig(os.path.join(save_path, f'{model_name}_mae.png'), dpi=300, bbox_inches='tight')
         plt.close()
         
-        # 绘制MAPE
+        # Plot the MAPE
         plt.figure(figsize=VISUALIZATION_CONFIG['figure_size'])
         plt.plot(history.history['mape'], label='Training MAPE')
         plt.plot(history.history['val_mape'], label='Validation MAPE')
@@ -1081,7 +1081,7 @@ class DataVisualizer:
         plt.savefig(os.path.join(save_path, f'{model_name}_mape.png'), dpi=300, bbox_inches='tight')
         plt.close()
         
-        # 绘制MSE
+        # Plot the MSE
         plt.figure(figsize=VISUALIZATION_CONFIG['figure_size'])
         plt.plot(history.history['mse'], label='Training MSE')
         plt.plot(history.history['val_mse'], label='Validation MSE')
@@ -1093,7 +1093,7 @@ class DataVisualizer:
         plt.savefig(os.path.join(save_path, f'{model_name}_mse.png'), dpi=300, bbox_inches='tight')
         plt.close()
         
-        # 绘制R2
+        # Plot the R2
         plt.figure(figsize=VISUALIZATION_CONFIG['figure_size'])
         plt.plot(history.history['r2'], label='Training R2')
         plt.plot(history.history['val_r2'], label='Validation R2')
@@ -1105,7 +1105,7 @@ class DataVisualizer:
         plt.savefig(os.path.join(save_path, f'{model_name}_r2.png'), dpi=300, bbox_inches='tight')
         plt.close()
         
-        # 绘制学习率变化
+        # Plot the change of learning rate
         plt.figure(figsize=VISUALIZATION_CONFIG['figure_size'])
         plt.plot(lr_history, label='Learning Rate')
         plt.title(f'{model_name} Learning Rate Changes')
@@ -1117,7 +1117,7 @@ class DataVisualizer:
         plt.savefig(os.path.join(save_path, f'{model_name}_lr.png'), dpi=300, bbox_inches='tight')
         plt.close()
         
-        # 保存训练历史数据
+        # Save the training history data
         history_dict = {
             'loss': history.history['loss'],
             'val_loss': history.history['val_loss'],
@@ -1132,25 +1132,25 @@ class DataVisualizer:
             'lr': lr_history
         }
         
-        # 保存为CSV文件
+        # Save as a CSV file
         history_df = pd.DataFrame(history_dict)
         history_df.to_csv(os.path.join(save_path, f'{model_name}_history.csv'), index=False)
         
     def plot_metrics_comparison(self, baseline_metrics, enhanced_metrics):
-        """比较基准模型和增强模型的性能指标
+        """Compare the performance metrics of the baseline model and the enhanced model
         
         Args:
-            baseline_metrics (dict): 基准模型的性能指标
-            enhanced_metrics (dict): 增强模型的性能指标
+            baseline_metrics (dict): Performance metrics of the baseline model
+            enhanced_metrics (dict): Performance metrics of the enhanced model
         """
-        # 设置图表样式
+        # Set the chart style
         plt.style.use('seaborn')
         
-        # 创建2x2的子图布局
+        # Create a 2x2 subgraph layout
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
         fig.suptitle('Performance Metrics Comparison Across Models', fontsize=16, y=1.02)
         
-        # 准备数据
+        # Prepare the data
         models = list(baseline_metrics.keys())
         metrics = {
             'RMSE': {'ax': ax1, 'title': 'Root Mean Square Error (RMSE)'},
@@ -1163,48 +1163,48 @@ class DataVisualizer:
         index = np.arange(len(models))
         
         def add_value_labels(ax, bars):
-            """为柱状图添加数值标签"""
+            """Add value labels to the bar chart"""
             for bar in bars:
                 height = bar.get_height()
                 ax.text(bar.get_x() + bar.get_width()/2., height,
                         f'{height:.3f}',
                         ha='center', va='bottom')
         
-        # 使用与weather_impact_conditions相同的颜色
-        baseline_color = '#2E86C1'  # 深蓝色
-        enhanced_color = '#28B463'  # 深绿色
+        # Use the same colors as weather_impact_conditions
+        baseline_color = '#2E86C1'  # Dark blue
+        enhanced_color = '#28B463'  # Dark green
         
-        # 绘制每个指标的子图
+        # Draw a subgraph for each metric
         for metric_name, metric_info in metrics.items():
             ax = metric_info['ax']
             
-            # 获取基准值和增强值
+            # Get the baseline and enhanced values
             baseline_values = [baseline_metrics[model][metric_name] for model in models]
             enhanced_values = [enhanced_metrics[model][metric_name] for model in models]
             
-            # 绘制柱状图
+            # Draw the bar chart
             bars1 = ax.bar(index - bar_width/2, baseline_values, width=bar_width,
                           label='Baseline', color=baseline_color, alpha=0.8)
             bars2 = ax.bar(index + bar_width/2, enhanced_values, width=bar_width,
                           label='Enhanced', color=enhanced_color, alpha=0.8)
             
-            # 添加数值标签
+            # Add value labels
             add_value_labels(ax, bars1)
             add_value_labels(ax, bars2)
             
-            # 设置图表属性
+            # Set chart properties
             ax.set_title(metric_info['title'], fontsize=12, pad=10)
             ax.set_xticks(index)
             ax.set_xticklabels(models, rotation=45)
             ax.legend(loc='upper right')
             ax.grid(True, alpha=0.3)
             
-            # 设置y轴范围，确保从0开始
-            if metric_name != 'R2':  # R2分数可以为负，所以不从0开始
+            # Set y-axis range to start from 0
+            if metric_name != 'R2':  # R2 score can be negative, so don't start from 0
                 ymin, ymax = ax.get_ylim()
-                ax.set_ylim(0, ymax * 1.1)  # 留出10%的空间显示数值标签
+                ax.set_ylim(0, ymax * 1.1)  # Leave 10% space to display value labels
             
-            # 添加y轴标签
+            # Add y-axis label
             if metric_name == 'MAPE':
                 ax.set_ylabel('MAPE (%)')
             else:
@@ -1212,7 +1212,7 @@ class DataVisualizer:
         
         plt.tight_layout()
         
-        # 保存图表到comparison文件夹
+        # Save the chart to the comparison folder
         plt.savefig(os.path.join(self.subdirs['comparison'], 'performance_metrics.png'), 
                     dpi=300, bbox_inches='tight')
         plt.close()

@@ -15,92 +15,92 @@ class DataProcessor:
         self.scaler = StandardScaler()
         
     def process_traffic_data(self, df):
-        """处理交通数据
+        """Process traffic data
         
         Args:
-            df (pd.DataFrame): 原始交通数据
+            df (pd.DataFrame): Original traffic data
         
         Returns:
-            pd.DataFrame: 处理后的数据
+            pd.DataFrame: Processed data
         """
-        # 将时间索引转换为datetime
+        # Convert time index to datetime
         df.index = pd.to_datetime(df.index)
         
-        # 计算所有传感器的平均速度
+        # Calculate the average speed of all sensors
         df['avg_speed'] = df.mean(axis=1)
         
-        # 移除空值
+        # Remove null values
         df = df.dropna()
         
-        # 使用 IQR 方法检测和处理异常值
+        # Detect and process outliers using the IQR method
         Q1 = df['avg_speed'].quantile(0.25)
         Q3 = df['avg_speed'].quantile(0.75)
         IQR = Q3 - Q1
         lower_bound = Q1 - 1.5 * IQR
         upper_bound = Q3 + 1.5 * IQR
         
-        # 过滤���范围之外的常值
+        # Filter out constant values outside the range
         df = df[(df['avg_speed'] >= lower_bound) & (df['avg_speed'] <= upper_bound)]
         
         return df
         
     def process_weather_data(self, df):
-        """处理天气数据"""
-        logging.info("开始处理天气数据...")
+        """Process weather data"""
+        logging.info("Start processing weather data...")
         
-        # 分析缺失值模式
+        # Analyze missing value patterns
         missing_summary = df.isnull().sum()
         total_missing = missing_summary.sum()
-        logging.info(f"天气数据总缺失值数: {total_missing}")
-        logging.info(f"每列缺失值概览:\n{missing_summary}")
+        logging.info(f"Total missing values in weather data: {total_missing}")
+        logging.info(f"Overview of missing values in each column:\n{missing_summary}")
         
-        # 可视化缺失值模式（可选）
+        # Visualize missing value patterns (optional)
         # import seaborn as sns
         # import matplotlib.pyplot as plt
         # sns.heatmap(df.isnull(), cbar=False)
         # plt.show()
 
-        # 视情况选择适当的填充方法
-        # 例如，对于某些特征使用前向填充，对于其他特征使用均值填充
+        # Choose the appropriate filling method according to the situation
+        # For example, use forward filling for some features and mean filling for others
         df_filled = df.copy()
         for column in df.columns:
             if df[column].isnull().sum() > 0:
                 if df[column].dtype == 'float':
-                    # 连续型变量使用插值法
+                    # Use interpolation for continuous variables
                     df_filled[column] = df[column].interpolate(method='time')
                 else:
-                    # 类别型变量使用前向填充
+                    # Use forward filling for categorical variables
                     df_filled[column] = df[column].fillna(method='ffill')
         
-        # 如果仍有缺失值，使用后向填充
+        # If there are still missing values, use backward filling
         df_filled = df_filled.fillna(method='bfill')
         
-        # 检查是否还有缺失值
+        # Check if there are still missing values
         remaining_missing = df_filled.isnull().sum().sum()
         if remaining_missing > 0:
-            logging.warning(f"填充后仍有缺失值数: {remaining_missing}")
+            logging.warning(f"Number of missing values after filling: {remaining_missing}")
         else:
-            logging.info("天气数据缺失值处理完成")
+            logging.info("Weather data missing value processing completed")
         
-        # 后续处理...
+        # Post-processing...
         df = df_filled
         
-        # 选择重要的天气特征
+        # Select important weather features
         selected_features = [
-            'TMAX', 'TMIN',  # 温度
-            'PRCP',         # 降水量
-            'AWND',         # 风速
-            'RHAV',         # 相对湿度
-            'ASLP'          # 气压
+            'TMAX', 'TMIN',  # Temperature
+            'PRCP',         # Precipitation
+            'AWND',         # Wind speed
+            'RHAV',         # Relative humidity
+            'ASLP'          # Air pressure
         ]
         
         df = df[selected_features]
         
-        # 添加衍生特征
-        df['temp_diff'] = df['TMAX'] - df['TMIN']  # 温差
-        df['is_raining'] = (df['PRCP'] > 0).astype(int)  # 是否有降水
+        # Add derived features
+        df['temp_diff'] = df['TMAX'] - df['TMIN']  # Temperature difference
+        df['is_raining'] = (df['PRCP'] > 0).astype(int)  # Is it raining
         
-        # 处理异常值
+        # Process outliers
         for col in df.columns:
             Q1 = df[col].quantile(0.25)
             Q3 = df[col].quantile(0.75)
@@ -109,95 +109,95 @@ class DataProcessor:
             upper_bound = Q3 + 1.5 * IQR
             df[col] = df[col].clip(lower_bound, upper_bound)
         
-        logging.info("天气数据处理完成")
+        logging.info("Weather data processing completed")
         return df
         
     def align_and_merge_data(self, traffic_df, weather_df):
-        """对齐并并交通和天气数据
+        """Align and merge traffic and weather data
         
         Args:
-            traffic_df: 处理后的交通数据
-            weather_df: 理后的天气数据
+            traffic_df: Processed traffic data
+            weather_df: Processed weather data
         Returns:
-            合并后的DataFrame
+            Merged DataFrame
         """
-        logging.info("开始合并数据...")
+        logging.info("Start merging data...")
         
-        # 确保时间频率一致（使用5分钟间隔）
+        # Ensure consistent time frequency (use 5-minute interval)
         traffic_df = traffic_df.resample('5T').mean()
         weather_df = weather_df.resample('5T').mean()
         
-        # 对齐时间索引
+        # Align time index
         common_idx = traffic_df.index.intersection(weather_df.index)
         traffic_df = traffic_df.loc[common_idx]
         weather_df = weather_df.loc[common_idx]
         
-        # 合并数据
+        # Merge data
         merged_df = pd.concat([traffic_df, weather_df], axis=1)
         
-        # 删除包含缺失值的行
+        # Remove rows containing missing values
         merged_df = merged_df.dropna()
         
-        logging.info(f"数据合并完成，最终数据形状: {merged_df.shape}")
+        logging.info(f"Data merge completed, final data shape: {merged_df.shape}")
         return merged_df
         
     def create_features(self, df, include_weather=True):
-        """创建特征"""
-        # 确保数据按时间排序
+        """Create features"""
+        # Ensure data is sorted by time
         df = df.sort_index()
         
-        # 创建时间特征
+        # Create time features
         df['hour'] = df.index.hour
         df['day_of_week'] = df.index.dayofweek
         df['month'] = df.index.month
         
-        # 添加节假日标记
-        # 假设使用美国的公共假期
+        # Add holiday flag
+        # Assume using public holidays in the United States
         import holidays
         us_holidays = holidays.US()
         df['is_holiday'] = df.index.to_series().apply(lambda x: 1 if x in us_holidays else 0)
         
-        # 创建滞后特征
+        # Create lag features
         df['speed_lag1'] = df['avg_speed'].shift(1)
         df['speed_lag2'] = df['avg_speed'].shift(2)
         df['speed_lag3'] = df['avg_speed'].shift(3)
         
-        # 创建更长的移动平均特征
+        # Create longer moving average features
         df['speed_ma5'] = df['avg_speed'].rolling(window=5).mean()
         df['speed_ma10'] = df['avg_speed'].rolling(window=10).mean()
         df['speed_ma15'] = df['avg_speed'].rolling(window=15).mean()
         df['speed_ma30'] = df['avg_speed'].rolling(window=30).mean()
         
-        # 天气类型编码
+        # Weather type encoding
         if include_weather:
-            # 假设天气数据中有天气描述字段，例如'weather_description'
-            # 需要将天气描述进行类别编码
+            # Assume there is a weather description field in the weather data, such as 'weather_description'
+            # Need to encode the weather description as a category
             if 'weather_description' in df.columns:
                 from sklearn.preprocessing import LabelEncoder
                 le = LabelEncoder()
                 df['weather_encoded'] = le.fit_transform(df['weather_description'])
         
-        # 移除包含NaN的行
+        # Remove rows containing NaN
         df = df.dropna()
         
         return df
         
     def split_data(self, data):
-        """分割数据集"""
-        # 设置随机种子
+        """Split the dataset"""
+        # Set the random seed
         np.random.seed(RANDOM_SEED)
         
-        # 提取目标变量
+        # Extract the target variable
         y = data['target']
-        # 删除目标变量列
+        # Remove the target variable column
         X = data.drop('target', axis=1)
         
-        # 使用sklearn的train_test_split，并设置随机种子
+        # Use sklearn's train_test_split, and set the random seed
         X_train, X_temp, y_train, y_temp = train_test_split(
             X, y, test_size=(1-TRAIN_RATIO), random_state=RANDOM_SEED
         )
         
-        # 将剩余数据分为验证集和测试集
+        # Split the remaining data into validation and test sets
         val_ratio_adjusted = VAL_RATIO / (1-TRAIN_RATIO)
         X_val, X_test, y_val, y_test = train_test_split(
             X_temp, y_temp, test_size=(TEST_RATIO/(TEST_RATIO+VAL_RATIO)),
@@ -207,23 +207,23 @@ class DataProcessor:
         return X_train, X_val, X_test, y_train, y_val, y_test
         
     def prepare_data(self, traffic_data, weather_data=None):
-        """准备实验数据"""
-        # 基础数据处理
+        """Prepare experimental data"""
+        # Basic data processing
         processed_data = traffic_data.copy()
         
-        # 设置目标变量（假设最后一列是目标变量）
+        # Set the target variable (assuming the last column is the target variable)
         processed_data['target'] = processed_data.iloc[:, -1]
         
         if weather_data is not None:
-            # 合并天气数据
+            # Merge weather data
             processed_data = pd.concat([processed_data, weather_data], axis=1)
         
-        # 数据清洗
+        # Data cleaning
         processed_data = processed_data.replace([np.inf, -np.inf], np.nan)
         processed_data = processed_data.fillna(method='ffill')
         processed_data = processed_data.fillna(method='bfill')
         
-        # 标准化
+        # Standardize
         scaler = StandardScaler()
         scaled_data = pd.DataFrame(
             scaler.fit_transform(processed_data),
@@ -234,47 +234,47 @@ class DataProcessor:
         return scaled_data
         
     def preprocess_weather_features(self, weather_data):
-        """优化天气特征的预处理"""
-        # 1. 创建复合天气特征
-        weather_data['temp_range'] = weather_data['TMAX'] - weather_data['TMIN']  # 温差
-        weather_data['feels_like'] = weather_data['TMAX'] - 0.55 * (1 - weather_data['RHAV']/100) * (weather_data['TMAX'] - 14.5)  # 体感温度
-        weather_data['wind_chill'] = 13.12 + 0.6215 * weather_data['TMAX'] - 11.37 * (weather_data['AWND']**0.16) + 0.3965 * weather_data['TMAX'] * (weather_data['AWND']**0.16)  # 风寒指数
+        """Optimize the preprocessing of weather features"""
+        # 1. Create composite weather features
+        weather_data['temp_range'] = weather_data['TMAX'] - weather_data['TMIN']  # Temperature difference
+        weather_data['feels_like'] = weather_data['TMAX'] - 0.55 * (1 - weather_data['RHAV']/100) * (weather_data['TMAX'] - 14.5)  # Feels like temperature
+        weather_data['wind_chill'] = 13.12 + 0.6215 * weather_data['TMAX'] - 11.37 * (weather_data['AWND']**0.16) + 0.3965 * weather_data['TMAX'] * (weather_data['AWND']**0.16)  # Wind chill index
         
-        # 2. 创建天气状况指标
+        # 2. Create weather condition indicators
         weather_data['severe_weather'] = ((weather_data['PRCP'] > weather_data['PRCP'].quantile(0.95)) | 
                                         (weather_data['AWND'] > weather_data['AWND'].quantile(0.95))).astype(int)
         
-        # 3. 添加时间特征与天气的交互项
+        # 3. Add interaction terms between time features and weather
         weather_data['hour'] = weather_data.index.hour
         weather_data['is_rush_hour'] = ((weather_data['hour'] >= 7) & (weather_data['hour'] <= 9) | 
                                        (weather_data['hour'] >= 16) & (weather_data['hour'] <= 18)).astype(int)
         weather_data['rush_hour_rain'] = weather_data['is_rush_hour'] * (weather_data['PRCP'] > 0).astype(int)
         
-        # 4. 添加天气变化率
+        # 4. Add weather change rate
         weather_data['temp_change'] = weather_data['TMAX'].diff()
         weather_data['precip_change'] = weather_data['PRCP'].diff()
         weather_data['wind_change'] = weather_data['AWND'].diff()
         
-        # 5. 添加天气趋势特征
+        # 5. Add weather trend features
         weather_data['temp_trend'] = weather_data['TMAX'].rolling(window=12).mean()
         weather_data['precip_trend'] = weather_data['PRCP'].rolling(window=12).mean()
         weather_data['wind_trend'] = weather_data['AWND'].rolling(window=12).mean()
         
-        # 6. 处理缺失值
+        # 6. Handle missing values
         weather_data = weather_data.fillna(method='ffill').fillna(method='bfill')
         
         return weather_data
 
     def prepare_sequences(self, traffic_data, weather_data=None, sequence_length=12):
-        """修改数据准备过程"""
-        # 设置随机种子
+        """Modify the data preparation process"""
+        # Set the random seed
         np.random.seed(RANDOM_SEED)
         
         if weather_data is not None:
-            # 预处理天气特征
+            # Preprocess weather features
             weather_data = self.preprocess_weather_features(weather_data)
             
-            # 选择最重要的天气特征
+            # Select the most important weather features
             weather_features = [
                 'TMAX', 'TMIN', 'PRCP', 'AWND', 'RHAV',
                 'temp_range', 'feels_like', 'wind_chill',
@@ -282,29 +282,29 @@ class DataProcessor:
             ]
             weather_data = weather_data[weather_features]
             
-            # 标准化天气特征
+            # Standardize weather features
             weather_data = (weather_data - weather_data.mean()) / weather_data.std()
         
-        # 处理交通数据
+        # Process traffic data
         traffic_processed = self.process_traffic_data(traffic_data)
         
         if weather_data is not None:
-            # 合并数据
+            # Merge data
             data = self.align_and_merge_data(traffic_processed, weather_data)
         else:
             data = traffic_processed
             
-        # 创建特征
+        # Create features
         data = self.create_features(data, include_weather=(weather_data is not None))
         
-        # 标准化数据
+        # Standardize data
         data_scaled = self.prepare_data(data)
         
-        # 准备特征和目标变量
+        # Prepare features and target variables
         X = data_scaled.drop('target', axis=1)
         y = data_scaled['target']
         
-        # 创建序列数据
+        # Create sequence data
         X_sequences = []
         y_sequences = []
         
@@ -315,12 +315,12 @@ class DataProcessor:
         X_sequences = np.array(X_sequences)
         y_sequences = np.array(y_sequences)
         
-        # 使用配置文件中的比例划分数据集
+        # Split the data set according to the ratio in the configuration file
         total_samples = len(X_sequences)
         train_size = int(total_samples * TRAIN_RATIO)
         val_size = int(total_samples * VAL_RATIO)
         
-        # 分割数据
+        # Split the data
         X_train = X_sequences[:train_size]
         y_train = y_sequences[:train_size]
         
@@ -330,25 +330,25 @@ class DataProcessor:
         X_test = X_sequences[train_size+val_size:]
         y_test = y_sequences[train_size+val_size:]
         
-        logging.info("数据序列准备完成")
-        logging.info(f"序列形状: {X_sequences.shape}")
-        logging.info(f"训练集: {X_train.shape}")
-        logging.info(f"验证集: {X_val.shape}")
-        logging.info(f"测试集: {X_test.shape}")
+        logging.info("Data sequence preparation completed")
+        logging.info(f"Sequence shape: {X_sequences.shape}")
+        logging.info(f"Training set: {X_train.shape}")
+        logging.info(f"Validation set: {X_val.shape}")
+        logging.info(f"Test set: {X_test.shape}")
         
         return X_train, y_train, X_val, y_val, X_test, y_test
 
     def augment_weather_data(self, X_weather, y):
-        """天气数据增强"""
+        """Augment weather data"""
         augmented_X = [X_weather]
         augmented_y = [y]
         
-        # 1. 添加高斯噪声
+        # 1. Add Gaussian noise
         noise = np.random.normal(0, 0.01, X_weather.shape)
         augmented_X.append(X_weather + noise)
         augmented_y.append(y)
         
-        # 2. 随机缩放天气特征
+        # 2. Randomly scale weather features
         scale = np.random.uniform(0.95, 1.05, X_weather.shape)
         augmented_X.append(X_weather * scale)
         augmented_y.append(y)

@@ -1,4 +1,4 @@
-# 配置文件路径和模型参数
+# Configuration file paths and model parameters
 import os
 import tensorflow as tf
 import tensorflow.keras.optimizers.legacy as legacy_optimizers
@@ -6,26 +6,26 @@ import importlib
 import numpy as np
 import random
 
-# 数据路径
+# Data paths
 RAW_DATA_DIR = 'data/raw'
 PROCESSED_DATA_DIR = 'data/processed'
 RESULTS_DIR = 'results'
 
-# 文件名
+# File names
 TRAFFIC_FILE = 'traffic/metr-la.csv'
 WEATHER_FILE = 'weather/noaa_weather_5min.csv'
 
-# 数据处理参数
-TRAIN_RATIO = 0.7    # 调整训练集比例
-VAL_RATIO = 0.15     # 增加验证集比例
-TEST_RATIO = 0.15    # 增加测试集比例
+# Data processing parameters
+TRAIN_RATIO = 0.7    # Adjust training set ratio
+VAL_RATIO = 0.15     # Increase validation set ratio
+TEST_RATIO = 0.15    # Increase test set ratio
 
-# 全局随机种子
+# Global random seed
 RANDOM_SEED = 42
 
 def set_global_random_seed():
-    """设置全局随机种子，确保实验可复现"""
-    # Python内置random模块
+    """Set global random seed to ensure experiment reproducibility"""
+    # Python built-in random module
     random.seed(RANDOM_SEED)
     
     # Numpy
@@ -34,55 +34,55 @@ def set_global_random_seed():
     # TensorFlow
     tf.random.set_seed(RANDOM_SEED)
     
-    # 设置TensorFlow的确定性操作
+    # Set TensorFlow deterministic operations
     tf.keras.utils.set_random_seed(RANDOM_SEED)
     
-    # 启用TensorFlow的确定性操作
+    # Enable TensorFlow deterministic operations
     tf.config.experimental.enable_op_determinism()
     
-    # 设置Python的哈希种子
+    # Set Python hash seed
     os.environ['PYTHONHASHSEED'] = str(RANDOM_SEED)
     
-    # 设置TensorFlow的线程数，以减少不确定性
+    # Set TensorFlow thread count to reduce uncertainty
     tf.config.threading.set_inter_op_parallelism_threads(1)
     tf.config.threading.set_intra_op_parallelism_threads(1)
 
-# 在导入配置时就设置随机种子
+# Set random seed when importing configuration
 set_global_random_seed()
 
-# 创建一个配置类来存储训练参数
+# Create a configuration class to store training parameters
 class TrainingConfig:
     def __init__(self):
         self.config = {
-            'batch_size': 64,        # 增加batch size以提高训练稳定性
-            'epochs': 100,           # 增加训练轮数
+            'batch_size': 64,        # Increase batch size for better training stability
+            'epochs': 100,           # Increase training epochs
             'verbose': 1,
             'callbacks': [
-                # 更温和的学习率预热和衰减策略
+                # More gentle learning rate warmup and decay strategy
                 tf.keras.callbacks.LearningRateScheduler(
                     lambda epoch: 1e-4 * tf.math.exp(0.05 * epoch) if epoch < 20
                     else 1e-4 * tf.math.exp(-0.05 * (epoch - 20))
                 ),
                 
-                # 更温和的ReduceLROnPlateau
+                # More gentle ReduceLROnPlateau
                 tf.keras.callbacks.ReduceLROnPlateau(
                     monitor='val_loss',
-                    factor=0.2,       # 更温和的学习率衰减
-                    patience=15,       # 增加耐心值
+                    factor=0.2,       # More gentle learning rate decay
+                    patience=15,       # Increase patience value
                     min_lr=1e-7,
                     verbose=1
                 ),
                 
-                # 调整EarlyStopping
+                # Adjust EarlyStopping
                 tf.keras.callbacks.EarlyStopping(
                     monitor='val_loss',
-                    patience=30,       # 增加耐心值
+                    patience=30,       # Increase patience value
                     restore_best_weights=True,
-                    min_delta=1e-5,    # 降低最小改善阈值
+                    min_delta=1e-5,    # Lower minimum improvement threshold
                     verbose=1
                 ),
                 
-                # 保持ModelCheckpoint不变
+                # Keep ModelCheckpoint unchanged
                 tf.keras.callbacks.ModelCheckpoint(
                     filepath='best_model.h5',
                     save_best_only=True,
@@ -93,18 +93,18 @@ class TrainingConfig:
             ]
         }
 
-# 创建全局配置实例
+# Create global configuration instance
 training_config = TrainingConfig()
 
 def get_training_config():
-    """获取训练配置"""
-    # 强制重新加载模块
+    """Get training configuration"""
+    # Force module reload
     importlib.reload(tf.keras.callbacks)
     return training_config.config
 
 def custom_combined_loss(y_true, y_pred):
-    """自定义组合损失函数，融合RMSE、MAE、MAPE和R²"""
-    # 计算各个指标
+    """Custom combined loss function, integrating RMSE, MAE, MAPE and R²"""
+    # Calculate metrics
     # MSE (for RMSE)
     mse = tf.reduce_mean(tf.square(y_true - y_pred))
     rmse = tf.sqrt(mse)
@@ -113,7 +113,7 @@ def custom_combined_loss(y_true, y_pred):
     mae = tf.reduce_mean(tf.abs(y_true - y_pred))
     
     # MAPE
-    epsilon = 1e-7  # 防止除零
+    epsilon = 1e-7  # Prevent division by zero
     mape = tf.reduce_mean(tf.abs((y_true - y_pred) / (y_true + epsilon))) * 100
     
     # R² (1 - ratio of residual sum of squares to total sum of squares)
@@ -121,31 +121,31 @@ def custom_combined_loss(y_true, y_pred):
     ss_tot = tf.reduce_sum(tf.square(y_true - tf.reduce_mean(y_true)))
     r2 = 1 - (ss_res / (ss_tot + epsilon))
     
-    # 组合损失（可以调整权重）
-    alpha_rmse = 0.3  # RMSE权重
-    alpha_mae = 0.3   # MAE权重
-    alpha_mape = 0.2  # MAPE权重
-    alpha_r2 = 0.2    # R²权重
+    # Combined loss (adjustable weights)
+    alpha_rmse = 0.3  # RMSE weight
+    alpha_mae = 0.3   # MAE weight
+    alpha_mape = 0.2  # MAPE weight
+    alpha_r2 = 0.2    # R² weight
     
-    # 注意：由于R²越大越好，我们用1-R²
+    # Note: Since R² is better when larger, we use 1-R²
     combined_loss = (alpha_rmse * rmse + 
                     alpha_mae * mae + 
-                    alpha_mape * mape * 0.01 + # 将MAPE缩放到相似范围
+                    alpha_mape * mape * 0.01 + # Scale MAPE to similar range
                     alpha_r2 * (1 - r2))
     
     return combined_loss
 
 def get_model_config():
-    """获取模型配置"""
+    """Get model configuration"""
     return {
         'LSTM': {
-            'units': [128, 64, 32],      # 保持不变
+            'units': [128, 64, 32],      # Keep unchanged
             'dropout': 0.2,              
             'l2_regularization': 1e-6,   
             'optimizer': legacy_optimizers.Adam,
             'learning_rate': 1e-4,       
-            'loss': custom_combined_loss,  # 使用自定义组合损失函数
-            'metrics': ['mae', 'mse', 'mape']  # 保留这些度量用于监控
+            'loss': custom_combined_loss,  # Use custom combined loss function
+            'metrics': ['mae', 'mse', 'mape']  # Keep these metrics for monitoring
         },
         'GRU': {
             'units': [128, 64, 32],
@@ -153,45 +153,45 @@ def get_model_config():
             'l2_regularization': 1e-6,
             'optimizer': legacy_optimizers.Adam,
             'learning_rate': 1e-4,
-            'loss': custom_combined_loss,  # 使用自定义组合损失函数
+            'loss': custom_combined_loss,  # Use custom combined loss function
             'metrics': ['mae', 'mse', 'mape']
         },
         'CNN_LSTM': {
-            'cnn_filters': [128, 64, 32],  # 增加CNN滤波器数量
-            'cnn_kernel_size': 5,          # 增加卷积核大小以捕捉更长期的模式
-            'lstm_units': [128, 64, 32],   # 增加LSTM单元数
-            'dropout': 0.15,               # 略微减小dropout以增强学习能力
-            'l2_regularization': 5e-7,     # 减小正则化强度
+            'cnn_filters': [128, 64, 32],  # Increase CNN filter count
+            'cnn_kernel_size': 5,          # Increase kernel size to capture longer patterns
+            'lstm_units': [128, 64, 32],   # Increase LSTM units
+            'dropout': 0.15,               # Slightly reduce dropout to enhance learning
+            'l2_regularization': 5e-7,     # Reduce regularization strength
             'optimizer': legacy_optimizers.Adam,
-            'learning_rate': 5e-5,         # 使用更小的学习率
-            'loss': custom_combined_loss,  # 使用自定义组合损失函数
+            'learning_rate': 5e-5,         # Use smaller learning rate
+            'loss': custom_combined_loss,  # Use custom combined loss function
             'metrics': ['mae', 'mse', 'mape']
         }
     }
 
-# 添加自定义指标
+# Add custom metrics
 def custom_r2_score(y_true, y_pred):
-    """自定义R²分数计算"""
+    """Custom R² score calculation"""
     epsilon = 1e-7
     ss_res = tf.reduce_sum(tf.square(y_true - y_pred))
     ss_tot = tf.reduce_sum(tf.square(y_true - tf.reduce_mean(y_true)))
     return 1 - (ss_res / (ss_tot + epsilon))
 
 def custom_rmse(y_true, y_pred):
-    """自定义RMSE计算"""
+    """Custom RMSE calculation"""
     return tf.sqrt(tf.reduce_mean(tf.square(y_true - y_pred)))
 
-# 将自定义指标添加到TensorFlow的自定义对象范围
+# Add custom metrics to TensorFlow's custom objects scope
 tf.keras.utils.get_custom_objects().update({
     'custom_combined_loss': custom_combined_loss,
     'r2_score': custom_r2_score,
     'rmse': custom_rmse
 })
 
-# 验置
+# Experiment settings
 EXPERIMENT_TYPES = ['baseline', 'enhanced']
 
-# 可视化配置
+# Visualization configuration
 VISUALIZATION_CONFIG = {
     'figure_size': (12, 8),
     'style': 'seaborn',
@@ -199,13 +199,13 @@ VISUALIZATION_CONFIG = {
     'dpi': 300
 }
 
-# 数据处理参数验证
-assert abs(TRAIN_RATIO + VAL_RATIO + TEST_RATIO - 1.0) < 1e-10, "数据集划分之和必须等于1"
+# Data processing parameter validation
+assert abs(TRAIN_RATIO + VAL_RATIO + TEST_RATIO - 1.0) < 1e-10, "Dataset split ratios must sum to 1"
 
-# 添加数据处理配置
+# Add data processing configuration
 DATA_CONFIG = {
-    'sequence_length': 24,        # 增加序列长度，有利于CNN捕捉时序模式
-    'prediction_horizon': 3,      # 保持不变
+    'sequence_length': 24,        # Increase sequence length for better CNN temporal pattern capture
+    'prediction_horizon': 3,      # Keep unchanged
     'weather_feature_selection': {
         'correlation_threshold': 0.1,  
         'importance_threshold': 0.05   
@@ -213,26 +213,26 @@ DATA_CONFIG = {
     'features': {
         'traffic': ['avg_speed', 'volume', 'occupancy'],
         'weather': [
-            'TMAX', 'TMIN', 'PRCP', 'AWND',  # 保持关键天气特征
+            'TMAX', 'TMIN', 'PRCP', 'AWND',  # Keep key weather features
             'temp_range', 'feels_like',
             'severe_weather', 'rush_hour_rain',
-            'wind_direction'  # 添加风向特征
+            'wind_direction'  # Add wind direction feature
         ]
     }
 }
 
-# 添加天气分析配置
+# Add weather analysis configuration
 WEATHER_ANALYSIS_CONFIG = {
-    'extreme_weather_threshold': 0.85,  # 调整极端天气阈值
-    'rush_hour_periods': [(6, 10), (16, 20)],  # 扩大高峰时段范围
+    'extreme_weather_threshold': 0.85,  # Adjust extreme weather threshold
+    'rush_hour_periods': [(6, 10), (16, 20)],  # Expand rush hour periods
     'weather_features': [
         'Temperature', 'Precipitation', 'Wind Speed', 'Humidity',
         'Wind Chill', 'Heat Index', 'Visibility', 'Pressure'
     ]
 }
-# 替换为动态导入函数
+# Replace with dynamic import function
 def get_config():
-    """获取所有配置"""
+    """Get all configurations"""
     return {
         'training': get_training_config(),
         'model': get_model_config()

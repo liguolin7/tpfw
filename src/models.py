@@ -9,36 +9,36 @@ from tensorflow.keras.layers import (
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.regularizers import l2
 import tensorflow.keras.optimizers.legacy as legacy_optimizers
-from . import config  # 修改导入方式
+from . import config  # modify the import method
 import warnings
 from sklearn.metrics import r2_score
 
-# 配置GPU
+# Configure GPU
 gpus = tf.config.experimental.list_physical_devices('GPU')
 if gpus:
     try:
-        # 设置 GPU 内存增长
+        # Set GPU memory growth
         for gpu in gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
         
-        # 设置 GPU 选项
-        tf.config.experimental.enable_tensor_float_32_execution(True)  # 启用 TF32
-        tf.config.optimizer.set_jit(True)  # 启用 XLA JIT 编译
-        tf.config.threading.set_inter_op_parallelism_threads(8)  # 设置线程数
+        # Set GPU options
+        tf.config.experimental.enable_tensor_float_32_execution(True)  # Enable TF32
+        tf.config.optimizer.set_jit(True)  # Enable XLA JIT compilation
+        tf.config.threading.set_inter_op_parallelism_threads(8)  # Set the number of threads
         tf.config.threading.set_intra_op_parallelism_threads(8)
         
-        # 设置混合精度训练
+        # Set mixed precision training
         policy = tf.keras.mixed_precision.Policy('mixed_float16')
         tf.keras.mixed_precision.set_global_policy(policy)
         
     except RuntimeError as e:
         print(f"GPU configuration error: {e}")
         
-# 设置日志级别
+# Set log level
 tf.get_logger().setLevel('ERROR')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-# 设置环境变量以优化性能
+# Set environment variables for performance optimization
 os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
 os.environ['TF_GPU_THREAD_COUNT'] = '8'
 os.environ['TF_USE_CUDNN_BATCHNORM_SPATIAL_PERSISTENT'] = '1'
@@ -49,39 +49,39 @@ os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 class DataPreprocessor:
     @staticmethod
     def prepare_data(X, y):
-        """准备数据，确保数据类型和格式正确"""
-        # 使用 float32 而不是 float16，因为某些操作需要更高的精度
+        """Prepare data, ensure correct data types and formats"""
+        # Use float32 instead of float16, as some operations require higher precision
         X = tf.cast(X, tf.float32)
         y = tf.cast(y, tf.float32)
         return X, y
 
 class BaselineModels:
-    """基准模型类 - 使用简单结构"""
+    """Baseline model class - use simple structures"""
     def __init__(self):
         self.models = {}
         
     def build_lstm(self, input_shape):
-        """构建基础LSTM模型"""
-        # 获取最新配置
+        """Build basic LSTM model"""
+        # Get the latest configuration
         model_config = config.get_model_config()
         
         model = tf.keras.Sequential([
-            # 添加输入标准化层
+            # Add input normalization layer
             tf.keras.layers.BatchNormalization(input_shape=input_shape),
             
-            # 第一个LSTM层
+            # First LSTM layer
             tf.keras.layers.LSTM(
                 units=model_config['LSTM']['units'][0],
                 return_sequences=True,
                 dropout=model_config['LSTM']['dropout'],
-                recurrent_dropout=0.1,  # 添加循环dropout
+                recurrent_dropout=0.1,  # Add recurrent dropout
                 kernel_regularizer=tf.keras.regularizers.l2(
                     model_config['LSTM']['l2_regularization']
                 )
             ),
             tf.keras.layers.BatchNormalization(),
             
-            # 第二个LSTM层
+            # Second LSTM layer
             tf.keras.layers.LSTM(
                 units=model_config['LSTM']['units'][1],
                 return_sequences=False,
@@ -89,7 +89,7 @@ class BaselineModels:
                 recurrent_dropout=0.1
             ),
             
-            # 全连接层
+            # Fully connected layer
             tf.keras.layers.Dense(32, activation='relu'),
             tf.keras.layers.Dropout(0.1),
             tf.keras.layers.Dense(1)
@@ -97,14 +97,14 @@ class BaselineModels:
         return model
     
     def build_gru(self, input_shape):
-        """构建基础GRU模型"""
-        # 获取最新配置
+        """Build basic GRU model"""
+        # Get the latest configuration
         model_config = config.get_model_config()
         
         model = tf.keras.Sequential([
             tf.keras.layers.BatchNormalization(input_shape=input_shape),
             
-            # 双向GRU
+            # Bidirectional GRU
             tf.keras.layers.Bidirectional(tf.keras.layers.GRU(
                 units=model_config['GRU']['units'][0],
                 return_sequences=True,
@@ -126,14 +126,14 @@ class BaselineModels:
         return model
     
     def build_cnn_lstm(self, input_shape):
-        """构建基础CNN-LSTM模型"""
-        # 获取最新配置
+        """Build basic CNN-LSTM model"""
+        # Get the latest configuration
         model_config = config.get_model_config()
         
         model = tf.keras.Sequential([
             tf.keras.layers.BatchNormalization(input_shape=input_shape),
             
-            # 并行卷积层
+            # Parallel convolutional layers
             tf.keras.layers.Conv1D(
                 filters=model_config['CNN_LSTM']['cnn_filters'][0],
                 kernel_size=3,
@@ -150,7 +150,7 @@ class BaselineModels:
             tf.keras.layers.BatchNormalization(),
             tf.keras.layers.MaxPooling1D(pool_size=2),
             
-            # LSTM层
+            # LSTM layer
             tf.keras.layers.LSTM(
                 units=model_config['CNN_LSTM']['lstm_units'][0],
                 return_sequences=True,
@@ -170,25 +170,25 @@ class BaselineModels:
         return model
     
     def train_model(self, model_name, X_train, y_train, X_val, y_val):
-        """训练模型"""
+        """Train the model"""
         try:
-            # 每次训练时重新获取最新的配置
+            # Get the latest configuration every time you train
             training_config = config.get_training_config()
             model_config = config.get_model_config()
             
-            # 验证配置值
-            logging.info(f"当前训练配置: epochs={training_config['epochs']}, batch_size={training_config['batch_size']}")
+            # Validate configuration values
+            logging.info(f"Current training configuration: epochs={training_config['epochs']}, batch_size={training_config['batch_size']}")
             
-            # 预处理数据
+            # Preprocess data
             X_train, y_train = DataPreprocessor.prepare_data(X_train, y_train)
             X_val, y_val = DataPreprocessor.prepare_data(X_val, y_val)
             
-            # 使用静默模式
+            # Use silent mode
             with tf.keras.utils.CustomObjectScope({}):
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     
-                    # 使用混合精度训练
+                    # Use mixed precision training
                     policy = tf.keras.mixed_precision.Policy('mixed_float16')
                     tf.keras.mixed_precision.set_global_policy(policy)
                     
@@ -202,7 +202,7 @@ class BaselineModels:
                         else:
                             raise ValueError(f"Unknown model name: {model_name}")
                         
-                        # 编译模型
+                        # Compile the model
                         model.compile(
                             optimizer=model_config[model_name]['optimizer'](
                                 learning_rate=model_config[model_name]['learning_rate']
@@ -215,14 +215,14 @@ class BaselineModels:
                     
                     logging.info(f"Training {model_name} for {training_config['epochs']} epochs")
                     
-                    # 添加自定义指标回调
+                    # Add custom metrics callback
                     custom_metrics_callback = CustomMetricsCallback(
                         X_train, y_train, X_val, y_val,
                         batch_size=training_config['batch_size']
                     )
                     callbacks = training_config['callbacks'] + [custom_metrics_callback]
                     
-                    # 使用tf.data.Dataset进行数据加载
+                    # Use tf.data.Dataset for data loading
                     train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))\
                         .batch(training_config['batch_size'])\
                         .prefetch(tf.data.AUTOTUNE)
@@ -231,38 +231,38 @@ class BaselineModels:
                         .batch(training_config['batch_size'])\
                         .prefetch(tf.data.AUTOTUNE)
                     
-                    # 训练模型，确保使用配置中的epochs值
+                    # Train the model, make sure to use the epochs value in the configuration
                     history = self.models[model_name].fit(
                         train_dataset,
                         validation_data=val_dataset,
-                        epochs=int(training_config['epochs']),  # 确保epochs是整数
-                        batch_size=int(training_config['batch_size']),  # 确保batch_size是整数
+                        epochs=int(training_config['epochs']),  # Make sure epochs is an integer
+                        batch_size=int(training_config['batch_size']),  # Make sure batch_size is an integer
                         verbose=training_config['verbose'],
                         callbacks=callbacks,
-                        use_multiprocessing=False,  # 禁用多进程
-                        workers=1  # 减少worker数量
+                        use_multiprocessing=False,  # Disable multiprocessing
+                        workers=1  # Reduce the number of workers
                     )
                     
                     return self.models[model_name], history
                 
         except Exception as e:
-            logging.error(f"训练过程中出现错误: {str(e)}")
+            logging.error(f"Error occurred during training: {str(e)}")
             raise e
 
 class EnhancedModels:
-    """增强模型类 - 使用更复杂的结构处理天气特征"""
+    """Enhanced model class - use more complex structures to handle weather features"""
     def __init__(self):
         self.models = {}
         
     def build_lstm(self, input_shape):
-        """构建增强版LSTM模型"""
+        """Build enhanced LSTM model"""
         inputs = tf.keras.Input(shape=input_shape)
         
-        # 1. 分离交通和天气特征
-        traffic_features = inputs[:, :, :207]  # 交通特征
-        weather_features = inputs[:, :, 207:]  # 天气特征
+        # 1. Separate traffic and weather features
+        traffic_features = inputs[:, :, :207]  # Traffic features
+        weather_features = inputs[:, :, 207:]  # Weather features
         
-        # 2. 交通特征处理分支
+        # 2. Traffic feature processing branch
         traffic = tf.keras.layers.BatchNormalization()(traffic_features)
         traffic = tf.keras.layers.LSTM(
             units=128,
@@ -271,7 +271,7 @@ class EnhancedModels:
             recurrent_dropout=0.2
         )(traffic)
         
-        # 3. 天气特征处理分支
+        # 3. Weather feature processing branch
         weather = tf.keras.layers.BatchNormalization()(weather_features)
         weather = tf.keras.layers.LSTM(
             units=64,
@@ -279,17 +279,17 @@ class EnhancedModels:
             dropout=0.2
         )(weather)
         
-        # 4. 特征融合
+        # 4. Feature fusion
         concat = tf.keras.layers.Concatenate()([traffic, weather])
         
-        # 5. 主干网络
+        # 5. Main network
         x = tf.keras.layers.LSTM(
             units=128,
             return_sequences=False,
             dropout=0.2
         )(concat)
         
-        # 6. 输出层
+        # 6. Output layer
         x = tf.keras.layers.Dense(64, activation='relu')(x)
         x = tf.keras.layers.Dropout(0.2)(x)
         outputs = tf.keras.layers.Dense(1)(x)
@@ -297,14 +297,14 @@ class EnhancedModels:
         return tf.keras.Model(inputs=inputs, outputs=outputs)
     
     def build_gru(self, input_shape):
-        """构建增强版GRU模型"""
+        """Build enhanced GRU model"""
         inputs = tf.keras.Input(shape=input_shape)
         
-        # 1. 分离特征
+        # 1. Separate features
         traffic_features = inputs[:, :, :207]
         weather_features = inputs[:, :, 207:]
         
-        # 2. 交通特征处理
+        # 2. Traffic feature processing
         traffic = tf.keras.layers.BatchNormalization()(traffic_features)
         traffic = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(
             units=128,
@@ -313,7 +313,7 @@ class EnhancedModels:
             recurrent_dropout=0.2
         ))(traffic)
         
-        # 3. 天气特征处理
+        # 3. Weather feature processing
         weather = tf.keras.layers.BatchNormalization()(weather_features)
         weather_attention = tf.keras.layers.MultiHeadAttention(
             num_heads=4,
@@ -328,10 +328,10 @@ class EnhancedModels:
             dropout=0.2
         ))(weather)
         
-        # 4. 特征融合
+        # 4. Feature fusion
         concat = tf.keras.layers.Concatenate()([traffic, weather])
         
-        # 5. 时间注意力
+        # 5. Temporal attention
         temporal_attention = tf.keras.layers.MultiHeadAttention(
             num_heads=8,
             key_dim=32
@@ -339,22 +339,22 @@ class EnhancedModels:
         concat = tf.keras.layers.Add()([concat, temporal_attention])
         concat = tf.keras.layers.LayerNormalization()(concat)
         
-        # 6. 主干网络
+        # 6. Main network
         x = tf.keras.layers.GRU(
             units=128,
             return_sequences=False,
             dropout=0.2
         )(concat)
         
-        # 7. 残差连接
+        # 7. Residual connection
         traffic_pooled = tf.keras.layers.GlobalAveragePooling1D()(traffic)
         weather_pooled = tf.keras.layers.GlobalAveragePooling1D()(weather)
         residual = tf.keras.layers.Concatenate()([traffic_pooled, weather_pooled])
         
-        # 8. 特征融合
+        # 8. Feature fusion
         x = tf.keras.layers.Concatenate()([x, residual])
         
-        # 9. 输出层
+        # 9. Output layer
         x = tf.keras.layers.Dense(256, activation='relu')(x)
         x = tf.keras.layers.Dropout(0.2)(x)
         x = tf.keras.layers.Dense(128, activation='relu')(x)
@@ -364,23 +364,23 @@ class EnhancedModels:
         return tf.keras.Model(inputs=inputs, outputs=outputs)
     
     def build_cnn_lstm(self, input_shape):
-        """构建���强版CNN-LSTM模型"""
+        """Build enhanced CNN-LSTM model"""
         inputs = tf.keras.Input(shape=input_shape)
         
-        # 1. 分离特征
+        # 1. Separate features
         traffic_features = inputs[:, :, :207]
         weather_features = inputs[:, :, 207:]
         
-        # 2. 交通特征CNN处理
+        # 2. Traffic feature CNN processing
         traffic = tf.keras.layers.BatchNormalization()(traffic_features)
-        # 多尺度CNN
+        # Multi-scale CNN
         conv1 = tf.keras.layers.Conv1D(64, 3, padding='same', activation='relu')(traffic)
         conv2 = tf.keras.layers.Conv1D(64, 5, padding='same', activation='relu')(traffic)
         conv3 = tf.keras.layers.Conv1D(64, 7, padding='same', activation='relu')(traffic)
         traffic = tf.keras.layers.Concatenate()([conv1, conv2, conv3])
         traffic = tf.keras.layers.BatchNormalization()(traffic)
         
-        # 3. 天气特征处理
+        # 3. Weather feature processing
         weather = tf.keras.layers.BatchNormalization()(weather_features)
         weather_attention = tf.keras.layers.MultiHeadAttention(
             num_heads=4,
@@ -389,14 +389,14 @@ class EnhancedModels:
         weather = tf.keras.layers.Add()([weather, weather_attention])
         weather = tf.keras.layers.LayerNormalization()(weather)
         
-        # CNN处理天气特征
+        # CNN processing weather features
         weather = tf.keras.layers.Conv1D(32, 3, padding='same', activation='relu')(weather)
         weather = tf.keras.layers.BatchNormalization()(weather)
         
-        # 4. 特征融合
+        # 4. Feature fusion
         concat = tf.keras.layers.Concatenate()([traffic, weather])
         
-        # 5. 时间注意力
+        # 5. Temporal attention
         temporal_attention = tf.keras.layers.MultiHeadAttention(
             num_heads=8,
             key_dim=32
@@ -404,22 +404,22 @@ class EnhancedModels:
         concat = tf.keras.layers.Add()([concat, temporal_attention])
         concat = tf.keras.layers.LayerNormalization()(concat)
         
-        # 6. LSTM处理
+        # 6. LSTM processing
         x = tf.keras.layers.LSTM(
             units=128,
             return_sequences=False,
             dropout=0.2
         )(concat)
         
-        # 7. 残差连接
+        # 7. Residual connection
         traffic_pooled = tf.keras.layers.GlobalAveragePooling1D()(traffic)
         weather_pooled = tf.keras.layers.GlobalAveragePooling1D()(weather)
         residual = tf.keras.layers.Concatenate()([traffic_pooled, weather_pooled])
         
-        # 8. 特征融合
+        # 8. Feature fusion
         x = tf.keras.layers.Concatenate()([x, residual])
         
-        # 9. 输出层
+        # 9. Output layer
         x = tf.keras.layers.Dense(256, activation='relu')(x)
         x = tf.keras.layers.Dropout(0.2)(x)
         x = tf.keras.layers.Dense(128, activation='relu')(x)
@@ -429,22 +429,22 @@ class EnhancedModels:
         return tf.keras.Model(inputs=inputs, outputs=outputs)
     
     def train_model(self, model_name, X_train, y_train, X_val, y_val):
-        """训练模型"""
+        """Train the model"""
         try:
-            # 使用静默模式
+            # Use silent mode
             with tf.keras.utils.CustomObjectScope({}):
-                # 使用上下文管理器来抑制警告
+                # Use context manager to suppress warnings
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     
-                    # 每次训练时重新获取最新的配置
+                    # Get the latest configuration every time you train
                     training_config = config.get_training_config()
                     model_config = config.get_model_config()
                     
-                    # 验证配置值
-                    logging.info(f"当前训练配置: epochs={training_config['epochs']}, batch_size={training_config['batch_size']}")
+                    # Validate configuration values
+                    logging.info(f"Current training configuration: epochs={training_config['epochs']}, batch_size={training_config['batch_size']}")
                     
-                    # 使用 GPU 设备
+                    # Use GPU device
                     with tf.device('/GPU:0'):
                         if model_name not in self.models:
                             if model_name == 'LSTM':
@@ -456,13 +456,13 @@ class EnhancedModels:
                             else:
                                 raise ValueError(f"Unknown model name: {model_name}")
                             
-                            # 编译模型
+                            # Compile the model
                             model.compile(
                                 optimizer=model_config[model_name]['optimizer'](
                                     learning_rate=model_config[model_name]['learning_rate']
                                 ),
                                 loss=model_config[model_name]['loss'],
-                                metrics=['mae', 'mse', 'mape']  # 添加所有需要的指标
+                                metrics=['mae', 'mse', 'mape']  # Add all required metrics
                             )
                             
                             self.models[model_name] = model
@@ -470,14 +470,14 @@ class EnhancedModels:
                         logging.info(f"Before training - epochs value: {training_config['epochs']}")
                         logging.info(f"Training {model_name} for {training_config['epochs']} epochs")
                         
-                        # 添加自定义指标回调
+                        # Add custom metrics callback
                         custom_metrics_callback = CustomMetricsCallback(
                             X_train, y_train, X_val, y_val,
                             batch_size=training_config['batch_size']
                         )
                         callbacks = training_config['callbacks'] + [custom_metrics_callback]
                         
-                        # 使用tf.data.Dataset进行数据加载
+                        # Use tf.data.Dataset for data loading
                         train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))\
                             .batch(training_config['batch_size'])\
                             .prefetch(tf.data.AUTOTUNE)
@@ -486,81 +486,81 @@ class EnhancedModels:
                             .batch(training_config['batch_size'])\
                             .prefetch(tf.data.AUTOTUNE)
                         
-                        # 训练模型，确保使用配置中的epochs值
+                        # Train the model, make sure to use the epochs value in the configuration
                         history = self.models[model_name].fit(
                             train_dataset,
                             validation_data=val_dataset,
-                            epochs=int(training_config['epochs']),  # 确保epochs是整数
-                            batch_size=int(training_config['batch_size']),  # 确保batch_size是整数
+                            epochs=int(training_config['epochs']),  # Make sure epochs is an integer
+                            batch_size=int(training_config['batch_size']),  # Make sure batch_size is an integer
                             verbose=training_config['verbose'],
                             callbacks=callbacks,
-                            use_multiprocessing=False,  # 禁用多进程
-                            workers=1  # 减少worker数量
+                            use_multiprocessing=False,  # Disable multiprocessing
+                            workers=1  # Reduce the number of workers
                         )
                         
                         logging.info(f"After training - epochs value: {training_config['epochs']}")
                         return self.models[model_name], history
                         
         except Exception as e:
-            logging.error(f"训练过程中出现错误: {str(e)}")
+            logging.error(f"Error occurred during training: {str(e)}")
             raise e
 
 class CustomMetricsCallback(tf.keras.callbacks.Callback):
     def __init__(self, X_train, y_train, X_val, y_val, batch_size=128):
         super(CustomMetricsCallback, self).__init__()
-        # 预处理数据
+        # Preprocess the data
         self.X_train, self.y_train = DataPreprocessor.prepare_data(X_train, y_train)
         self.X_val, self.y_val = DataPreprocessor.prepare_data(X_val, y_val)
         self.batch_size = batch_size
         
     @tf.function
     def predict_batch(self, x):
-        """使用@tf.function加速预测"""
+        """Use @tf.function to accelerate prediction"""
         return self.model(x, training=False)
     
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
         
         try:
-            # 分批计算预测结果
+            # Calculate predictions in batches
             train_pred = []
             val_pred = []
             
-            # 训练集预测
+            # Predict on training set
             for i in range(0, len(self.X_train), self.batch_size):
                 batch_x = self.X_train[i:i + self.batch_size]
                 batch_pred = self.predict_batch(batch_x)
                 train_pred.append(batch_pred)
             
-            # 验证集预测
+            # Predict on validation set
             for i in range(0, len(self.X_val), self.batch_size):
                 batch_x = self.X_val[i:i + self.batch_size]
                 batch_pred = self.predict_batch(batch_x)
                 val_pred.append(batch_pred)
             
-            # 合并预测结果
+            # Concatenate the predictions
             train_pred = tf.concat(train_pred, axis=0)
             val_pred = tf.concat(val_pred, axis=0)
             
-            # 转换为numpy数组计算指标
+            # Convert to numpy arrays for metric calculation
             train_pred_np = train_pred.numpy().flatten()
             val_pred_np = val_pred.numpy().flatten()
             y_train_np = self.y_train.numpy().flatten()
             y_val_np = self.y_val.numpy().flatten()
             
-            # 计算训练集指标
+            # Calculate metrics on training set
             logs['rmse'] = np.sqrt(np.mean((y_train_np - train_pred_np) ** 2))
             logs['mae'] = np.mean(np.abs(y_train_np - train_pred_np))
             logs['mape'] = np.mean(np.abs((y_train_np - train_pred_np) / y_train_np)) * 100
             logs['r2'] = r2_score(y_train_np, train_pred_np)
             
-            # 计算验证集指标
+            # Calculate metrics on validation set
             logs['val_rmse'] = np.sqrt(np.mean((y_val_np - val_pred_np) ** 2))
             logs['val_mae'] = np.mean(np.abs(y_val_np - val_pred_np))
             logs['val_mape'] = np.mean(np.abs((y_val_np - val_pred_np) / y_val_np)) * 100
             logs['val_r2'] = r2_score(y_val_np, val_pred_np)
             
-            # 记录当前学习率
+            # Record the current learning rate
             logs['lr'] = tf.keras.backend.get_value(self.model.optimizer.lr)
             
         except Exception as e:
