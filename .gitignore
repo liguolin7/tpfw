@@ -24,10 +24,6 @@ ENV/
 .idea/
 .vscode/
 
-# Data files
-data/raw/*.csv
-data/processed/*.csv
-
 # Model files
 *.h5
 *.pkl
