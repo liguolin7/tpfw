@@ -139,6 +139,8 @@ def setup_logging():
         logging.info("未找到GPU设备，使用CPU进行训练")
     
     logging.info("-"*50)
+    
+    return log_file  # 返回日志文件路径，以便后续使用
 
 def setup_directories():
     """创建必要的目录结构"""
@@ -149,8 +151,7 @@ def setup_directories():
         os.path.join(config.RESULTS_DIR, 'figures', 'models'),
         os.path.join(config.RESULTS_DIR, 'figures', 'comparison'),
         os.path.join(config.RESULTS_DIR, 'figures', 'analysis'),
-        os.path.join(config.RESULTS_DIR, 'figures', 'training'),
-        'models'
+        os.path.join(config.RESULTS_DIR, 'figures', 'training')
     ]
     
     for directory in directories:
@@ -343,7 +344,7 @@ def main():
         config.set_global_random_seed()
         
         # 设置日志
-        setup_logging()
+        log_file = setup_logging()
         
         # 记录实验配置
         logging.info("实验配置：")
@@ -397,14 +398,12 @@ def main():
         for model_name in baseline_metrics.keys():
             logging.info(f"\n{model_name}模型:")
             logging.info("基准模型性能：")
-            logging.info(f"实际训练轮数: {len(baseline_models.histories[model_name].history['loss'])}")
             logging.info(f"RMSE: {baseline_metrics[model_name]['RMSE']:.4f}")
             logging.info(f"MAE: {baseline_metrics[model_name]['MAE']:.4f}")
             logging.info(f"R2: {baseline_metrics[model_name]['R2']:.4f}")
             logging.info(f"MAPE: {baseline_metrics[model_name]['MAPE']:.4f}")
             
             logging.info("\n增强模型性能：")
-            logging.info(f"实际训练轮数: {len(enhanced_models.histories[model_name].history['loss'])}")
             logging.info(f"RMSE: {enhanced_metrics[model_name]['RMSE']:.4f}")
             logging.info(f"MAE: {enhanced_metrics[model_name]['MAE']:.4f}")
             logging.info(f"R2: {enhanced_metrics[model_name]['R2']:.4f}")
@@ -446,7 +445,86 @@ def main():
             save_path=visualizer.subdirs['analysis']
         )
         
+        # 生成模型性能对比可视化
+        visualizer.plot_metrics_comparison(
+            baseline_metrics=baseline_metrics,
+            enhanced_metrics=enhanced_metrics
+        )
+        
+        # 生成天气影响分析可视化
+        visualizer.plot_weather_impact_comparison(
+            baseline_metrics=baseline_metrics,
+            enhanced_metrics=enhanced_metrics,
+            weather_data=weather_data,
+            save_path=visualizer.subdirs['comparison']
+        )
+        
+        # 创建性能对比表格
+        visualizer.create_performance_table(
+            baseline_metrics=baseline_metrics,
+            enhanced_metrics=enhanced_metrics,
+            improvements=improvements,
+            save_path=visualizer.subdirs['comparison']
+        )
+        
+        # 为每个模型生成详细的性能分析
+        for model_name in ['LSTM', 'GRU', 'CNN_LSTM']:
+            # 基准模型预测可视化
+            visualizer.plot_prediction_vs_actual(
+                y_true=y_test,
+                y_pred=baseline_predictions[model_name],
+                timestamps=test_timestamps,
+                model_name=f'{model_name}_baseline',
+                save_path=visualizer.subdirs['models']
+            )
+            
+            # 增强模型预测可视化
+            visualizer.plot_prediction_vs_actual(
+                y_true=y_test,
+                y_pred=enhanced_predictions[model_name],
+                timestamps=test_timestamps,
+                model_name=f'{model_name}_enhanced',
+                save_path=visualizer.subdirs['models']
+            )
+            
+            # 误差分布分析
+            visualizer.plot_error_distribution(
+                y_true=y_test,
+                y_pred=baseline_predictions[model_name],
+                model_name=f'{model_name}_baseline',
+                save_path=visualizer.subdirs['models']
+            )
+            
+            visualizer.plot_error_distribution(
+                y_true=y_test,
+                y_pred=enhanced_predictions[model_name],
+                model_name=f'{model_name}_enhanced',
+                save_path=visualizer.subdirs['models']
+            )
+        
         logging.info("可视化结果生成完成")
+        
+        # 保存实验配置和结果摘要
+        summary_file = os.path.join(os.path.dirname(log_file), f'summary_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt')
+        with open(summary_file, 'w', encoding='utf-8') as f:
+            f.write("实验配置和结果摘要\n")
+            f.write("="*50 + "\n\n")
+            
+            f.write("实验配置：\n")
+            f.write(f"随机种子: {config.RANDOM_SEED}\n")
+            f.write(f"数据集划分比例: 训练集={config.TRAIN_RATIO}, 验证集={config.VAL_RATIO}, 测试集={config.TEST_RATIO}\n")
+            f.write(f"序列长度: {config.DATA_CONFIG['sequence_length']}\n")
+            f.write(f"预测步长: {config.DATA_CONFIG['prediction_horizon']}\n\n")
+            
+            f.write("实验结果：\n")
+            for model_name in baseline_metrics.keys():
+                f.write(f"\n{model_name}模型性能提升：\n")
+                for metric, value in improvements[model_name].items():
+                    f.write(f"{metric}: {value:.2f}%\n")
+            
+            f.write(f"\n实验总耗时: {duration}\n")
+        
+        logging.info(f"\n实验配置和结果摘要已保存至: {summary_file}")
         logging.info("\n" + "-"*30)
         logging.info("实验全部完成")
         logging.info("-"*30)

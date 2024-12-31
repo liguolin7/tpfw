@@ -1,0 +1,30 @@
+实验配置和结果摘要
+==================================================
+
+实验配置：
+随机种子: 42
+数据集划分比例: 训练集=0.7, 验证集=0.15, 测试集=0.15
+序列长度: 24
+预测步长: 3
+
+实验结果：
+
+LSTM模型性能提升：
+RMSE_improvement: 10.48%
+MAE_improvement: 22.69%
+R2_improvement: 20.27%
+MAPE_improvement: 67.22%
+
+GRU模型性能提升：
+RMSE_improvement: 53.78%
+MAE_improvement: 57.79%
+R2_improvement: 98.48%
+MAPE_improvement: 44.04%
+
+CNN_LSTM模型性能提升：
+RMSE_improvement: 41.74%
+MAE_improvement: 40.36%
+R2_improvement: 67.15%
+MAPE_improvement: 13.75%
+
+实验总耗时: 0:51:33.971644

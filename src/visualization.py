@@ -33,8 +33,7 @@ class DataVisualizer:
             'models': os.path.join(self.figures_dir, 'models'),
             'training': os.path.join(self.figures_dir, 'training'),
             'traffic': os.path.join(self.figures_dir, 'traffic'),
-            'weather': os.path.join(self.figures_dir, 'weather'),
-            'metrics': os.path.join(self.figures_dir, 'metrics')
+            'weather': os.path.join(self.figures_dir, 'weather')
         }
         
         # 创建目录
@@ -592,8 +591,8 @@ class DataVisualizer:
         table.set_fontsize(9)
         table.scale(1.2, 1.5)
         
-        # 保存表格
-        plt.savefig(os.path.join(self.subdirs['metrics'], 'performance_table.png'), 
+        # 保存表格到comparison文件夹
+        plt.savefig(os.path.join(self.subdirs['comparison'], 'performance_table.png'), 
                     dpi=300, 
                     bbox_inches='tight',
                     pad_inches=0.05)
@@ -780,6 +779,9 @@ class DataVisualizer:
         # 确保保存目录存在
         os.makedirs(save_path, exist_ok=True)
         
+        # 定义高峰时段
+        rush_hours = [7, 8, 9, 17, 18, 19]  # 早晚高峰时段
+        
         # 为每个模型创建单独的图
         for model_name in ['LSTM', 'GRU', 'CNN_LSTM']:
             # 创建2x2的子图布局
@@ -788,174 +790,174 @@ class DataVisualizer:
             
             # 1. RMSE对比
             ax1 = fig.add_subplot(gs[0, 0])
-        conditions = ['Normal', 'Extreme Weather', 'Rush Hour']
-        baseline_rmse = []
-        enhanced_rmse = []
-        
-        # 正常条件
-        baseline_rmse.append(baseline_metrics[model_name]['RMSE'])
-        enhanced_rmse.append(enhanced_metrics[model_name]['RMSE'])
-        
-        # 极端天气条件
-        extreme_weather_mask = (
-            (weather_data['PRCP'] > weather_data['PRCP'].quantile(0.9)) | 
+            conditions = ['Normal', 'Extreme Weather', 'Rush Hour']
+            baseline_rmse = []
+            enhanced_rmse = []
+            
+            # 正常条件
+            baseline_rmse.append(baseline_metrics[model_name]['RMSE'])
+            enhanced_rmse.append(enhanced_metrics[model_name]['RMSE'])
+            
+            # 极端天气条件
+            extreme_weather_mask = (
+                (weather_data['PRCP'] > weather_data['PRCP'].quantile(0.9)) | 
                 (weather_data['AWND'] > weather_data['AWND'].quantile(0.9)) |
                 (weather_data['TMAX'] > weather_data['TMAX'].quantile(0.9)) |
                 (weather_data['TMIN'] < weather_data['TMIN'].quantile(0.1))
-        )
-        
-        if extreme_weather_mask.any():
-            baseline_rmse.append(baseline_metrics[model_name].get('extreme_weather_RMSE', 
-                                                                        baseline_metrics[model_name]['RMSE'] * 1.15))
-            enhanced_rmse.append(enhanced_metrics[model_name].get('extreme_weather_RMSE',
-                                                                        enhanced_metrics[model_name]['RMSE'] * 1.05))
-        else:
-            baseline_rmse.append(baseline_metrics[model_name]['RMSE'])
-            enhanced_rmse.append(enhanced_metrics[model_name]['RMSE'])
-        
-        # 高峰时段
-            rush_hours = [7, 8, 9, 17, 18, 19]  # 早晚高峰时段
-        rush_hour_mask = weather_data.index.hour.isin(rush_hours)
-        if rush_hour_mask.any():
-            baseline_rmse.append(baseline_metrics[model_name].get('rush_hour_RMSE',
-                                                                        baseline_metrics[model_name]['RMSE'] * 1.1))
-            enhanced_rmse.append(enhanced_metrics[model_name].get('rush_hour_RMSE',
-                                                                        enhanced_metrics[model_name]['RMSE'] * 1.03))
-        else:
-            baseline_rmse.append(baseline_metrics[model_name]['RMSE'])
-            enhanced_rmse.append(enhanced_metrics[model_name]['RMSE'])
-        
-        x = np.arange(len(conditions))
-        width = 0.35
-    
-        ax1.bar(x - width/2, baseline_rmse, width, label='Baseline', color='#2E86C1', alpha=0.8)
-        ax1.bar(x + width/2, enhanced_rmse, width, label='Enhanced', color='#28B463', alpha=0.8)
-        ax1.set_ylabel('RMSE')
-        ax1.set_title('RMSE Under Different Conditions')
-        ax1.set_xticks(x)
-        ax1.set_xticklabels(conditions)
-        ax1.legend()
-        ax1.grid(True, alpha=0.3)
-        
-        # 添加数值标签
-        for i, v in enumerate(baseline_rmse):
-            ax1.text(i - width/2, v, f'{v:.3f}', ha='center', va='bottom')
-        for i, v in enumerate(enhanced_rmse):
-            ax1.text(i + width/2, v, f'{v:.3f}', ha='center', va='bottom')
-        
-        # 2. MAE对比
-        ax2 = fig.add_subplot(gs[0, 1])
-        baseline_mae = []
-        enhanced_mae = []
-        
-        for condition in conditions:
-            if condition == 'Normal':
-                baseline_mae.append(baseline_metrics[model_name]['MAE'])
-                enhanced_mae.append(enhanced_metrics[model_name]['MAE'])
-            elif condition == 'Extreme Weather':
-                baseline_mae.append(baseline_metrics[model_name].get('extreme_weather_MAE',
-                                                                    baseline_metrics[model_name]['MAE'] * 1.15))
-                enhanced_mae.append(enhanced_metrics[model_name].get('extreme_weather_MAE',
-                                                                    enhanced_metrics[model_name]['MAE'] * 1.05))
-            else:  # Rush Hour
-                baseline_mae.append(baseline_metrics[model_name].get('rush_hour_MAE',
-                                                                    baseline_metrics[model_name]['MAE'] * 1.1))
-                enhanced_mae.append(enhanced_metrics[model_name].get('rush_hour_MAE',
-                                                                    enhanced_metrics[model_name]['MAE'] * 1.03))
-        
-        ax2.bar(x - width/2, baseline_mae, width, label='Baseline', color='#2E86C1', alpha=0.8)
-        ax2.bar(x + width/2, enhanced_mae, width, label='Enhanced', color='#28B463', alpha=0.8)
-        ax2.set_ylabel('MAE')
-        ax2.set_title('MAE Under Different Conditions')
-        ax2.set_xticks(x)
-        ax2.set_xticklabels(conditions)
-        ax2.legend()
-        ax2.grid(True, alpha=0.3)
-        
-        # 添加数值标签
-        for i, v in enumerate(baseline_mae):
-            ax2.text(i - width/2, v, f'{v:.3f}', ha='center', va='bottom')
-        for i, v in enumerate(enhanced_mae):
-            ax2.text(i + width/2, v, f'{v:.3f}', ha='center', va='bottom')
-        
-        # 3. MAPE对比
-        ax3 = fig.add_subplot(gs[1, 0])
-        baseline_mape = []
-        enhanced_mape = []
-        
-        for condition in conditions:
-            if condition == 'Normal':
-                baseline_mape.append(baseline_metrics[model_name]['MAPE'])
-                enhanced_mape.append(enhanced_metrics[model_name]['MAPE'])
-            elif condition == 'Extreme Weather':
-                baseline_mape.append(baseline_metrics[model_name].get('extreme_weather_MAPE',
-                                                                    baseline_metrics[model_name]['MAPE'] * 1.2))
-                enhanced_mape.append(enhanced_metrics[model_name].get('extreme_weather_MAPE',
-                                                                    enhanced_metrics[model_name]['MAPE'] * 1.1))
-            else:  # Rush Hour
-                baseline_mape.append(baseline_metrics[model_name].get('rush_hour_MAPE',
-                                                                    baseline_metrics[model_name]['MAPE'] * 1.15))
-                enhanced_mape.append(enhanced_metrics[model_name].get('rush_hour_MAPE',
-                                                                    enhanced_metrics[model_name]['MAPE'] * 1.05))
-        
-        ax3.bar(x - width/2, baseline_mape, width, label='Baseline', color='#2E86C1', alpha=0.8)
-        ax3.bar(x + width/2, enhanced_mape, width, label='Enhanced', color='#28B463', alpha=0.8)
-        ax3.set_ylabel('MAPE (%)')
-        ax3.set_title('MAPE Under Different Conditions')
-        ax3.set_xticks(x)
-        ax3.set_xticklabels(conditions)
-        ax3.legend()
-        ax3.grid(True, alpha=0.3)
-        
-        # 添加数值标签
-        for i, v in enumerate(baseline_mape):
-            ax3.text(i - width/2, v, f'{v:.1f}%', ha='center', va='bottom')
-        for i, v in enumerate(enhanced_mape):
-            ax3.text(i + width/2, v, f'{v:.1f}%', ha='center', va='bottom')
-        
-        # 4. R2对比
-        ax4 = fig.add_subplot(gs[1, 1])
-        baseline_r2 = []
-        enhanced_r2 = []
-        
-        for condition in conditions:
-            if condition == 'Normal':
-                baseline_r2.append(baseline_metrics[model_name]['R2'])
-                enhanced_r2.append(enhanced_metrics[model_name]['R2'])
-            elif condition == 'Extreme Weather':
-                baseline_r2.append(baseline_metrics[model_name].get('extreme_weather_R2',
-                                                                    baseline_metrics[model_name]['R2'] * 0.9))
-                enhanced_r2.append(enhanced_metrics[model_name].get('extreme_weather_R2',
-                                                                    enhanced_metrics[model_name]['R2'] * 0.95))
-            else:  # Rush Hour
-                baseline_r2.append(baseline_metrics[model_name].get('rush_hour_R2',
-                                                                    baseline_metrics[model_name]['R2'] * 0.95))
-                enhanced_r2.append(enhanced_metrics[model_name].get('rush_hour_R2',
-                                                                    enhanced_metrics[model_name]['R2'] * 0.97))
-        
-        ax4.bar(x - width/2, baseline_r2, width, label='Baseline', color='#2E86C1', alpha=0.8)
-        ax4.bar(x + width/2, enhanced_r2, width, label='Enhanced', color='#28B463', alpha=0.8)
-        ax4.set_ylabel('R² Score')
-        ax4.set_title('R² Under Different Conditions')
-        ax4.set_xticks(x)
-        ax4.set_xticklabels(conditions)
-        ax4.legend()
-        ax4.grid(True, alpha=0.3)
-        
-        # 添加数值标签
-        for i, v in enumerate(baseline_r2):
-            ax4.text(i - width/2, v, f'{v:.3f}', ha='center', va='bottom')
-        for i, v in enumerate(enhanced_r2):
-            ax4.text(i + width/2, v, f'{v:.3f}', ha='center', va='bottom')
-        
-        # 设置总标题
-        plt.suptitle(f'{model_name} Model Performance Under Different Conditions', 
-                    fontsize=14, y=1.02)
-        
-        plt.tight_layout()
-        plt.savefig(os.path.join(save_path, f'weather_impact_conditions_{model_name.lower()}.png'), 
-                    dpi=300, bbox_inches='tight')
-        plt.close()
+            )
+            
+            if extreme_weather_mask.any():
+                baseline_rmse.append(baseline_metrics[model_name].get('extreme_weather_RMSE', 
+                                                                    baseline_metrics[model_name]['RMSE'] * 1.15))
+                enhanced_rmse.append(enhanced_metrics[model_name].get('extreme_weather_RMSE',
+                                                                    enhanced_metrics[model_name]['RMSE'] * 1.05))
+            else:
+                baseline_rmse.append(baseline_metrics[model_name]['RMSE'])
+                enhanced_rmse.append(enhanced_metrics[model_name]['RMSE'])
+            
+            # 高峰时段
+            rush_hour_mask = weather_data.index.hour.isin(rush_hours)
+            if rush_hour_mask.any():
+                baseline_rmse.append(baseline_metrics[model_name].get('rush_hour_RMSE',
+                                                                    baseline_metrics[model_name]['RMSE'] * 1.1))
+                enhanced_rmse.append(enhanced_metrics[model_name].get('rush_hour_RMSE',
+                                                                    enhanced_metrics[model_name]['RMSE'] * 1.03))
+            else:
+                baseline_rmse.append(baseline_metrics[model_name]['RMSE'])
+                enhanced_rmse.append(enhanced_metrics[model_name]['RMSE'])
+            
+            x = np.arange(len(conditions))
+            width = 0.35
+            
+            ax1.bar(x - width/2, baseline_rmse, width, label='Baseline', color='#2E86C1', alpha=0.8)
+            ax1.bar(x + width/2, enhanced_rmse, width, label='Enhanced', color='#28B463', alpha=0.8)
+            ax1.set_ylabel('RMSE')
+            ax1.set_title('RMSE Under Different Conditions')
+            ax1.set_xticks(x)
+            ax1.set_xticklabels(conditions)
+            ax1.legend()
+            ax1.grid(True, alpha=0.3)
+            
+            # 添加数值标签
+            for i, v in enumerate(baseline_rmse):
+                ax1.text(i - width/2, v, f'{v:.3f}', ha='center', va='bottom')
+            for i, v in enumerate(enhanced_rmse):
+                ax1.text(i + width/2, v, f'{v:.3f}', ha='center', va='bottom')
+            
+            # 2. MAE对比
+            ax2 = fig.add_subplot(gs[0, 1])
+            baseline_mae = []
+            enhanced_mae = []
+            
+            for condition in conditions:
+                if condition == 'Normal':
+                    baseline_mae.append(baseline_metrics[model_name]['MAE'])
+                    enhanced_mae.append(enhanced_metrics[model_name]['MAE'])
+                elif condition == 'Extreme Weather':
+                    baseline_mae.append(baseline_metrics[model_name].get('extreme_weather_MAE',
+                                                                        baseline_metrics[model_name]['MAE'] * 1.15))
+                    enhanced_mae.append(enhanced_metrics[model_name].get('extreme_weather_MAE',
+                                                                        enhanced_metrics[model_name]['MAE'] * 1.05))
+                else:  # Rush Hour
+                    baseline_mae.append(baseline_metrics[model_name].get('rush_hour_MAE',
+                                                                        baseline_metrics[model_name]['MAE'] * 1.1))
+                    enhanced_mae.append(enhanced_metrics[model_name].get('rush_hour_MAE',
+                                                                        enhanced_metrics[model_name]['MAE'] * 1.03))
+            
+            ax2.bar(x - width/2, baseline_mae, width, label='Baseline', color='#2E86C1', alpha=0.8)
+            ax2.bar(x + width/2, enhanced_mae, width, label='Enhanced', color='#28B463', alpha=0.8)
+            ax2.set_ylabel('MAE')
+            ax2.set_title('MAE Under Different Conditions')
+            ax2.set_xticks(x)
+            ax2.set_xticklabels(conditions)
+            ax2.legend()
+            ax2.grid(True, alpha=0.3)
+            
+            # 添加数值标签
+            for i, v in enumerate(baseline_mae):
+                ax2.text(i - width/2, v, f'{v:.3f}', ha='center', va='bottom')
+            for i, v in enumerate(enhanced_mae):
+                ax2.text(i + width/2, v, f'{v:.3f}', ha='center', va='bottom')
+            
+            # 3. MAPE对比
+            ax3 = fig.add_subplot(gs[1, 0])
+            baseline_mape = []
+            enhanced_mape = []
+            
+            for condition in conditions:
+                if condition == 'Normal':
+                    baseline_mape.append(baseline_metrics[model_name]['MAPE'])
+                    enhanced_mape.append(enhanced_metrics[model_name]['MAPE'])
+                elif condition == 'Extreme Weather':
+                    baseline_mape.append(baseline_metrics[model_name].get('extreme_weather_MAPE',
+                                                                        baseline_metrics[model_name]['MAPE'] * 1.2))
+                    enhanced_mape.append(enhanced_metrics[model_name].get('extreme_weather_MAPE',
+                                                                        enhanced_metrics[model_name]['MAPE'] * 1.1))
+                else:  # Rush Hour
+                    baseline_mape.append(baseline_metrics[model_name].get('rush_hour_MAPE',
+                                                                        baseline_metrics[model_name]['MAPE'] * 1.15))
+                    enhanced_mape.append(enhanced_metrics[model_name].get('rush_hour_MAPE',
+                                                                        enhanced_metrics[model_name]['MAPE'] * 1.05))
+            
+            ax3.bar(x - width/2, baseline_mape, width, label='Baseline', color='#2E86C1', alpha=0.8)
+            ax3.bar(x + width/2, enhanced_mape, width, label='Enhanced', color='#28B463', alpha=0.8)
+            ax3.set_ylabel('MAPE (%)')
+            ax3.set_title('MAPE Under Different Conditions')
+            ax3.set_xticks(x)
+            ax3.set_xticklabels(conditions)
+            ax3.legend()
+            ax3.grid(True, alpha=0.3)
+            
+            # 添加数值标签
+            for i, v in enumerate(baseline_mape):
+                ax3.text(i - width/2, v, f'{v:.1f}%', ha='center', va='bottom')
+            for i, v in enumerate(enhanced_mape):
+                ax3.text(i + width/2, v, f'{v:.1f}%', ha='center', va='bottom')
+            
+            # 4. R2对比
+            ax4 = fig.add_subplot(gs[1, 1])
+            baseline_r2 = []
+            enhanced_r2 = []
+            
+            for condition in conditions:
+                if condition == 'Normal':
+                    baseline_r2.append(baseline_metrics[model_name]['R2'])
+                    enhanced_r2.append(enhanced_metrics[model_name]['R2'])
+                elif condition == 'Extreme Weather':
+                    baseline_r2.append(baseline_metrics[model_name].get('extreme_weather_R2',
+                                                                        baseline_metrics[model_name]['R2'] * 0.9))
+                    enhanced_r2.append(enhanced_metrics[model_name].get('extreme_weather_R2',
+                                                                        enhanced_metrics[model_name]['R2'] * 0.95))
+                else:  # Rush Hour
+                    baseline_r2.append(baseline_metrics[model_name].get('rush_hour_R2',
+                                                                        baseline_metrics[model_name]['R2'] * 0.95))
+                    enhanced_r2.append(enhanced_metrics[model_name].get('rush_hour_R2',
+                                                                        enhanced_metrics[model_name]['R2'] * 0.97))
+            
+            ax4.bar(x - width/2, baseline_r2, width, label='Baseline', color='#2E86C1', alpha=0.8)
+            ax4.bar(x + width/2, enhanced_r2, width, label='Enhanced', color='#28B463', alpha=0.8)
+            ax4.set_ylabel('R² Score')
+            ax4.set_title('R² Under Different Conditions')
+            ax4.set_xticks(x)
+            ax4.set_xticklabels(conditions)
+            ax4.legend()
+            ax4.grid(True, alpha=0.3)
+            
+            # 添加数值标签
+            for i, v in enumerate(baseline_r2):
+                ax4.text(i - width/2, v, f'{v:.3f}', ha='center', va='bottom')
+            for i, v in enumerate(enhanced_r2):
+                ax4.text(i + width/2, v, f'{v:.3f}', ha='center', va='bottom')
+            
+            # 设置总标题
+            plt.suptitle(f'{model_name} Model Performance Under Different Conditions', 
+                        fontsize=14, y=1.02)
+            
+            plt.tight_layout()
+            plt.savefig(os.path.join(save_path, f'weather_impact_conditions_{model_name.lower()}.png'), 
+                        dpi=300, bbox_inches='tight')
+            plt.close()
+            
     def create_comprehensive_report(self, baseline_metrics, enhanced_metrics, weather_data, save_path):
         """创建综合性能报告"""
         # 定义颜色和线型
@@ -985,6 +987,10 @@ class DataVisualizer:
                         f'{height:.3f}',
                         ha='center', va='bottom')
         
+        # 使用与weather_impact_conditions相同的颜色
+        baseline_color = '#2E86C1'  # 深蓝色
+        enhanced_color = '#28B463'  # 深绿色
+        
         # 绘制每个指标的子图
         for metric_name, metric_info in metrics.items():
             ax = metric_info['ax']
@@ -994,29 +1000,38 @@ class DataVisualizer:
             enhanced_values = [enhanced_metrics[model][metric_name] for model in models]
             
             # 绘制柱状图
-            bars1 = ax.bar(index - bar_width/2, baseline_values, bar_width,
-                          label='Baseline', color=metric_info['color'], alpha=0.6)
-            bars2 = ax.bar(index + bar_width/2, enhanced_values, bar_width,
-                          label='Enhanced', color=metric_info['color'], alpha=0.9)
+            bars1 = ax.bar(index - bar_width/2, baseline_values, width=bar_width,
+                          label='Baseline', color=baseline_color, alpha=0.8)
+            bars2 = ax.bar(index + bar_width/2, enhanced_values, width=bar_width,
+                          label='Enhanced', color=enhanced_color, alpha=0.8)
             
             # 添加数值标签
             add_value_labels(ax, bars1)
             add_value_labels(ax, bars2)
             
             # 设置图表属性
-            ax.set_title(metric_info['title'])
+            ax.set_title(metric_info['title'], fontsize=12, pad=10)
             ax.set_xticks(index)
             ax.set_xticklabels(models, rotation=45)
-            ax.legend()
+            ax.legend(loc='upper right')
             ax.grid(True, alpha=0.3)
             
             # 设置y轴范围，确保从0开始
             if metric_name != 'R2':  # R2分数可以为负，所以不从0开始
                 ymin, ymax = ax.get_ylim()
                 ax.set_ylim(0, ymax * 1.1)  # 留出10%的空间显示数值标签
+            
+            # 添加y轴标签
+            if metric_name == 'MAPE':
+                ax.set_ylabel('MAPE (%)')
+            else:
+                ax.set_ylabel(metric_name)
         
         plt.tight_layout()
-        plt.savefig(os.path.join(self.subdirs['metrics'], 'performance_metrics.png'), dpi=300, bbox_inches='tight')
+        
+        # 保存图表到comparison文件夹
+        plt.savefig(os.path.join(self.subdirs['comparison'], 'performance_metrics.png'), 
+                    dpi=300, bbox_inches='tight')
         plt.close()
     
     def plot_training_history(self, history, model_name, save_path):
@@ -1133,15 +1148,15 @@ class DataVisualizer:
         
         # 创建2x2的子图布局
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
-        fig.suptitle('Model Performance Comparison', fontsize=16, y=1.02)
+        fig.suptitle('Performance Metrics Comparison Across Models', fontsize=16, y=1.02)
         
         # 准备数据
         models = list(baseline_metrics.keys())
         metrics = {
-            'RMSE': {'ax': ax1, 'color': 'skyblue', 'title': 'Root Mean Square Error (RMSE)'},
-            'MAE': {'ax': ax2, 'color': 'lightgreen', 'title': 'Mean Absolute Error (MAE)'},
-            'R2': {'ax': ax3, 'color': 'lightcoral', 'title': 'R-squared Score'},
-            'MAPE': {'ax': ax4, 'color': 'plum', 'title': 'Mean Absolute Percentage Error (MAPE)'}
+            'RMSE': {'ax': ax1, 'title': 'Root Mean Square Error (RMSE)'},
+            'MAE': {'ax': ax2, 'title': 'Mean Absolute Error (MAE)'},
+            'R2': {'ax': ax3, 'title': 'R-squared Score'},
+            'MAPE': {'ax': ax4, 'title': 'Mean Absolute Percentage Error (MAPE)'}
         }
         
         bar_width = 0.35
@@ -1155,6 +1170,10 @@ class DataVisualizer:
                         f'{height:.3f}',
                         ha='center', va='bottom')
         
+        # 使用与weather_impact_conditions相同的颜色
+        baseline_color = '#2E86C1'  # 深蓝色
+        enhanced_color = '#28B463'  # 深绿色
+        
         # 绘制每个指标的子图
         for metric_name, metric_info in metrics.items():
             ax = metric_info['ax']
@@ -1164,31 +1183,36 @@ class DataVisualizer:
             enhanced_values = [enhanced_metrics[model][metric_name] for model in models]
             
             # 绘制柱状图
-            bars1 = ax.bar(index - bar_width/2, baseline_values, bar_width,
-                          label='Baseline', color=metric_info['color'], alpha=0.6)
-            bars2 = ax.bar(index + bar_width/2, enhanced_values, bar_width,
-                          label='Enhanced', color=metric_info['color'], alpha=0.9)
+            bars1 = ax.bar(index - bar_width/2, baseline_values, width=bar_width,
+                          label='Baseline', color=baseline_color, alpha=0.8)
+            bars2 = ax.bar(index + bar_width/2, enhanced_values, width=bar_width,
+                          label='Enhanced', color=enhanced_color, alpha=0.8)
             
             # 添加数值标签
             add_value_labels(ax, bars1)
             add_value_labels(ax, bars2)
             
             # 设置图表属性
-            ax.set_title(metric_info['title'])
+            ax.set_title(metric_info['title'], fontsize=12, pad=10)
             ax.set_xticks(index)
             ax.set_xticklabels(models, rotation=45)
-            ax.legend()
+            ax.legend(loc='upper right')
             ax.grid(True, alpha=0.3)
             
             # 设置y轴范围，确保从0开始
             if metric_name != 'R2':  # R2分数可以为负，所以不从0开始
                 ymin, ymax = ax.get_ylim()
                 ax.set_ylim(0, ymax * 1.1)  # 留出10%的空间显示数值标签
+            
+            # 添加y轴标签
+            if metric_name == 'MAPE':
+                ax.set_ylabel('MAPE (%)')
+            else:
+                ax.set_ylabel(metric_name)
         
         plt.tight_layout()
         
-        # 保存图表
-        save_path = os.path.join(self.figures_dir, 'comparison', 'performance_metrics.png')
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        # 保存图表到comparison文件夹
+        plt.savefig(os.path.join(self.subdirs['comparison'], 'performance_metrics.png'), 
+                    dpi=300, bbox_inches='tight')
         plt.close()

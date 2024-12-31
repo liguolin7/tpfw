@@ -32,6 +32,3 @@ data/processed/*.csv
 *.h5
 *.pkl
 
-# Logs
-logs/
-*.log

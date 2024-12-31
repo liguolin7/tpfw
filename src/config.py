@@ -55,7 +55,7 @@ class TrainingConfig:
     def __init__(self):
         self.config = {
             'batch_size': 64,        # 增加batch size以提高训练稳定性
-            'epochs': 150,           # 增加训练轮数
+            'epochs': 100,           # 增加训练轮数
             'verbose': 1,
             'callbacks': [
                 # 更温和的学习率预热和衰减策略
@@ -102,6 +102,39 @@ def get_training_config():
     importlib.reload(tf.keras.callbacks)
     return training_config.config
 
+def custom_combined_loss(y_true, y_pred):
+    """自定义组合损失函数，融合RMSE、MAE、MAPE和R²"""
+    # 计算各个指标
+    # MSE (for RMSE)
+    mse = tf.reduce_mean(tf.square(y_true - y_pred))
+    rmse = tf.sqrt(mse)
+    
+    # MAE
+    mae = tf.reduce_mean(tf.abs(y_true - y_pred))
+    
+    # MAPE
+    epsilon = 1e-7  # 防止除零
+    mape = tf.reduce_mean(tf.abs((y_true - y_pred) / (y_true + epsilon))) * 100
+    
+    # R² (1 - ratio of residual sum of squares to total sum of squares)
+    ss_res = tf.reduce_sum(tf.square(y_true - y_pred))
+    ss_tot = tf.reduce_sum(tf.square(y_true - tf.reduce_mean(y_true)))
+    r2 = 1 - (ss_res / (ss_tot + epsilon))
+    
+    # 组合损失（可以调整权重）
+    alpha_rmse = 0.3  # RMSE权重
+    alpha_mae = 0.3   # MAE权重
+    alpha_mape = 0.2  # MAPE权重
+    alpha_r2 = 0.2    # R²权重
+    
+    # 注意：由于R²越大越好，我们用1-R²
+    combined_loss = (alpha_rmse * rmse + 
+                    alpha_mae * mae + 
+                    alpha_mape * mape * 0.01 + # 将MAPE缩放到相似范围
+                    alpha_r2 * (1 - r2))
+    
+    return combined_loss
+
 def get_model_config():
     """获取模型配置"""
     return {
@@ -111,8 +144,8 @@ def get_model_config():
             'l2_regularization': 1e-6,   
             'optimizer': legacy_optimizers.Adam,
             'learning_rate': 1e-4,       
-            'loss': 'mse',               
-            'metrics': ['mae', 'mse', 'mape']
+            'loss': custom_combined_loss,  # 使用自定义组合损失函数
+            'metrics': ['mae', 'mse', 'mape']  # 保留这些度量用于监控
         },
         'GRU': {
             'units': [128, 64, 32],
@@ -120,7 +153,7 @@ def get_model_config():
             'l2_regularization': 1e-6,
             'optimizer': legacy_optimizers.Adam,
             'learning_rate': 1e-4,
-            'loss': 'mse',
+            'loss': custom_combined_loss,  # 使用自定义组合损失函数
             'metrics': ['mae', 'mse', 'mape']
         },
         'CNN_LSTM': {
@@ -131,10 +164,29 @@ def get_model_config():
             'l2_regularization': 5e-7,     # 减小正则化强度
             'optimizer': legacy_optimizers.Adam,
             'learning_rate': 5e-5,         # 使用更小的学习率
-            'loss': 'huber',               # 使用Huber损失提高鲁棒性
+            'loss': custom_combined_loss,  # 使用自定义组合损失函数
             'metrics': ['mae', 'mse', 'mape']
         }
     }
+
+# 添加自定义指标
+def custom_r2_score(y_true, y_pred):
+    """自定义R²分数计算"""
+    epsilon = 1e-7
+    ss_res = tf.reduce_sum(tf.square(y_true - y_pred))
+    ss_tot = tf.reduce_sum(tf.square(y_true - tf.reduce_mean(y_true)))
+    return 1 - (ss_res / (ss_tot + epsilon))
+
+def custom_rmse(y_true, y_pred):
+    """自定义RMSE计算"""
+    return tf.sqrt(tf.reduce_mean(tf.square(y_true - y_pred)))
+
+# 将自定义指标添加到TensorFlow的自定义对象范围
+tf.keras.utils.get_custom_objects().update({
+    'custom_combined_loss': custom_combined_loss,
+    'r2_score': custom_r2_score,
+    'rmse': custom_rmse
+})
 
 # 验置
 EXPERIMENT_TYPES = ['baseline', 'enhanced']
