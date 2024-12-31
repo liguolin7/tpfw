@@ -16,7 +16,7 @@ This project implements a traffic flow prediction system that incorporates weath
 - Python 3.8+
 - CUDA 11.0+ (for GPU usage)
 - 32GB+ RAM recommended
-- NVIDIA RTX 4090 or equivalent GPU (recommended)
+- NVIDIA RTX GPU (recommended)
 - Ubuntu 22.04 or other Linux distributions (recommended)
 - Anaconda or Miniconda (for environment management)
 
