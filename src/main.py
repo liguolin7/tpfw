@@ -49,43 +49,96 @@ tf.autograph.set_verbosity(0)
 # 禁用 TensorFlow 执行器警告
 tf.debugging.disable_traceback_filtering()
 
-# 配置日志格式
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s | %(message)s',
-    datefmt='%H:%M:%S'
-)
-
-# 创建自定义的日志过滤器
-class TensorFlowFilter(logging.Filter):
-    def filter(self, record):
-        return not any(msg in str(record.getMessage()).lower() for msg in [
-            'executing op',
-            'gradient',
-            'executor',
-            'custom operations',
-            'numa node',
-            'tf-trt',
-            'tensorflow',
-            'cuda',
-            'gpu',
-            'warning',
-            'warn'
-        ])
-
-# 配置日志过滤
-for handler in logging.getLogger().handlers:
-    handler.addFilter(TensorFlowFilter())
-
-# 配置TensorFlow日志
-logging.getLogger('tensorflow').addFilter(TensorFlowFilter())
-logging.getLogger('tensorflow').setLevel(logging.ERROR)
-
-# 禁用 NumPy 警告
-np.seterr(all='ignore')
-
-# 禁用 Pandas 警告
-pd.options.mode.chained_assignment = None
+def setup_logging():
+    """配置日志设置"""
+    # 创建logs目录
+    log_dir = 'logs'
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # 生成带时间戳的日志文件名
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    log_file = os.path.join(log_dir, f'experiment_{timestamp}.log')
+    
+    # 配置日志格式
+    log_format = logging.Formatter(
+        '%(asctime)s | %(levelname)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # 配置文件处理器
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setFormatter(log_format)
+    file_handler.setLevel(logging.INFO)
+    
+    # 配置控制台处理器
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(log_format)
+    console_handler.setLevel(logging.INFO)
+    
+    # 创建自定义的日志过滤器
+    class TensorFlowFilter(logging.Filter):
+        def filter(self, record):
+            return not any(msg in str(record.getMessage()).lower() for msg in [
+                'executing op',
+                'gradient',
+                'executor',
+                'custom operations',
+                'numa node',
+                'tf-trt',
+                'tensorflow',
+                'cuda',
+                'gpu',
+                'warning',
+                'warn'
+            ])
+    
+    # 获取根日志记录器
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    
+    # 清除现有的处理器
+    root_logger.handlers.clear()
+    
+    # 添加处理器
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+    
+    # 添加过滤器到两个处理器
+    tf_filter = TensorFlowFilter()
+    file_handler.addFilter(tf_filter)
+    console_handler.addFilter(tf_filter)
+    
+    # 配置TensorFlow日志
+    tf_logger = logging.getLogger('tensorflow')
+    tf_logger.addFilter(tf_filter)
+    tf_logger.setLevel(logging.ERROR)
+    
+    # 禁用 NumPy 警告
+    np.seterr(all='ignore')
+    
+    # 禁用 Pandas 警告
+    pd.options.mode.chained_assignment = None
+    
+    # 记录实验开始信息和配置信息
+    logging.info("-"*30)
+    logging.info("实验开始")
+    logging.info("-"*30)
+    
+    # 记录系统信息
+    logging.info("系统信息：")
+    logging.info(f"Python版本: {sys.version}")
+    logging.info(f"TensorFlow版本: {tf.__version__}")
+    logging.info(f"NumPy版本: {np.__version__}")
+    logging.info(f"Pandas版本: {pd.__version__}")
+    
+    # 记录GPU信息
+    if tf.config.list_physical_devices('GPU'):
+        for gpu in tf.config.list_physical_devices('GPU'):
+            logging.info(f"找到GPU设备: {gpu}")
+    else:
+        logging.info("未找到GPU设备，使用CPU进行训练")
+    
+    logging.info("-"*50)
 
 def setup_directories():
     """创建必要的目录结构"""
@@ -175,6 +228,7 @@ def run_experiment():
             )
             
             logging.info(f"{model_name}基准模型评估结果:")
+            logging.info(f"实际训练轮数: {len(history.history['loss'])}")
             logging.info(f"RMSE: {metrics['RMSE']:.4f}")
             logging.info(f"MAE: {metrics['MAE']:.4f}")
             logging.info(f"R2: {metrics['R2']:.4f}")
@@ -248,6 +302,7 @@ def run_experiment():
             )
             
             logging.info(f"{model_name}增强模型评估结果:")
+            logging.info(f"实际训练轮数: {len(history.history['loss'])}")
             logging.info(f"RMSE: {metrics['RMSE']:.4f}")
             logging.info(f"MAE: {metrics['MAE']:.4f}")
             logging.info(f"R2: {metrics['R2']:.4f}")
@@ -282,31 +337,85 @@ def run_experiment():
         raise e
 
 def main():
+    """主函数"""
     try:
+        # 确保随机种子被正确设置
+        config.set_global_random_seed()
+        
+        # 设置日志
+        setup_logging()
+        
+        # 记录实验配置
+        logging.info("实验配置：")
+        logging.info(f"随机种子: {config.RANDOM_SEED}")
+        logging.info(f"数据集划分比例: 训练集={config.TRAIN_RATIO}, 验证集={config.VAL_RATIO}, 测试集={config.TEST_RATIO}")
+        logging.info(f"序列长度: {config.DATA_CONFIG['sequence_length']}")
+        logging.info(f"预测步长: {config.DATA_CONFIG['prediction_horizon']}")
+        
         # 创建必要的目录
         setup_directories()
+        
+        # 加载数据
+        logging.info("\n开始加载数据...")
+        traffic_data = load_traffic_data()
+        weather_data = load_weather_data()
+        
+        # 记录数据信息
+        logging.info("\n数据集信息：")
+        logging.info(f"交通数据形状: {traffic_data.shape}")
+        logging.info(f"交通数据时间范围: {traffic_data.index[0]} 到 {traffic_data.index[-1]}")
+        logging.info(f"天气数据形状: {weather_data.shape}")
+        logging.info(f"天气数据时间范围: {weather_data.index[0]} 到 {weather_data.index[-1]}")
         
         # 获取最新配置
         training_config = config.get_training_config()
         model_config = config.get_model_config()
         
-        # 验证配置值
-        logging.info(f"初始配置验证:")
-        logging.info(f"epochs={training_config['epochs']}")
-        logging.info(f"batch_size={training_config['batch_size']}")
-        
-        logging.info(f"Initial epochs value: {training_config['epochs']}")
+        # 记录训练配置
+        logging.info("\n训练配置：")
+        logging.info(f"批次大小: {training_config['batch_size']}")
+        logging.info(f"训练轮数: {training_config['epochs']}")
+        logging.info(f"优化器配置: {model_config}")
         
         visualizer = DataVisualizer()
         
-        # 运行实验取结果
+        # 运行实验
+        logging.info("\n开始运行实验...")
+        start_time = datetime.now()
+        
         (baseline_metrics, enhanced_metrics, improvements,
          y_test, test_timestamps, baseline_predictions,
          enhanced_predictions, enhanced_models) = run_experiment()
         
-        # 加载原始数据用于基础可视化
-        traffic_data = load_traffic_data()
-        weather_data = load_weather_data()
+        # 记录实验时间
+        end_time = datetime.now()
+        duration = end_time - start_time
+        logging.info(f"\n实验完成，总耗时: {duration}")
+        
+        # 记录实验结果
+        logging.info("\n实验结果：")
+        for model_name in baseline_metrics.keys():
+            logging.info(f"\n{model_name}模型:")
+            logging.info("基准模型性能：")
+            logging.info(f"实际训练轮数: {len(baseline_models.histories[model_name].history['loss'])}")
+            logging.info(f"RMSE: {baseline_metrics[model_name]['RMSE']:.4f}")
+            logging.info(f"MAE: {baseline_metrics[model_name]['MAE']:.4f}")
+            logging.info(f"R2: {baseline_metrics[model_name]['R2']:.4f}")
+            logging.info(f"MAPE: {baseline_metrics[model_name]['MAPE']:.4f}")
+            
+            logging.info("\n增强模型性能：")
+            logging.info(f"实际训练轮数: {len(enhanced_models.histories[model_name].history['loss'])}")
+            logging.info(f"RMSE: {enhanced_metrics[model_name]['RMSE']:.4f}")
+            logging.info(f"MAE: {enhanced_metrics[model_name]['MAE']:.4f}")
+            logging.info(f"R2: {enhanced_metrics[model_name]['R2']:.4f}")
+            logging.info(f"MAPE: {enhanced_metrics[model_name]['MAPE']:.4f}")
+            
+            logging.info("\n性能提升：")
+            for metric, value in improvements[model_name].items():
+                logging.info(f"{metric}: {value:.2f}%")
+        
+        # 生成可视化
+        logging.info("\n开始生成可视化结果...")
         
         # 生成交通数据可视化
         visualizer.plot_traffic_patterns(
@@ -325,137 +434,26 @@ def main():
             traffic_data=traffic_data,
             save_path=visualizer.subdirs['traffic']
         )
-
+        
         visualizer.plot_weather_correlation_analysis(
             weather_data=weather_data,
             save_path=visualizer.subdirs['weather']
         )
-
+        
         visualizer.plot_traffic_weather_relationship(
             traffic_data=traffic_data,
             weather_data=weather_data,
             save_path=visualizer.subdirs['analysis']
         )
         
-        # 1. 为每个模型生成对比图
-        for model_name in ['LSTM', 'GRU', 'CNN_LSTM']:
-            # 基础预测结果可视化
-            visualizer.plot_prediction_vs_actual(
-                y_true=y_test[:100],
-                y_pred=baseline_predictions[model_name][:100],
-                timestamps=test_timestamps[:100],
-                model_name=f'{model_name}_baseline',
-                save_path=visualizer.subdirs['models']
-            )
-            
-            # 增强预测结果可视化
-            visualizer.plot_prediction_vs_actual(
-                y_true=y_test[:100],
-                y_pred=enhanced_predictions[model_name][:100],
-                timestamps=test_timestamps[:100],
-                model_name=f'{model_name}_enhanced',
-                save_path=visualizer.subdirs['models']
-            )
-            
-            # 预测误差分布
-            visualizer.plot_error_distribution(
-                y_true=y_test,
-                y_pred=baseline_predictions[model_name],
-                model_name=f'{model_name}_baseline',
-                save_path=visualizer.subdirs['models']
-            )
-            
-            visualizer.plot_error_distribution(
-                y_true=y_test,
-                y_pred=enhanced_predictions[model_name],
-                model_name=f'{model_name}_enhanced',
-                save_path=visualizer.subdirs['models']
-            )
-        
-        # 2. 创建所有模型的预测对比
-        predictions_dict = {
-            'LSTM_baseline': baseline_predictions['LSTM'],
-            'LSTM_enhanced': enhanced_predictions['LSTM'],
-            'GRU_baseline': baseline_predictions['GRU'],
-            'GRU_enhanced': enhanced_predictions['GRU'],
-            'CNN_LSTM_baseline': baseline_predictions['CNN_LSTM'],
-            'CNN_LSTM_enhanced': enhanced_predictions['CNN_LSTM']
-        }
-        visualizer.plot_prediction_comparison(
-            y_true=y_test,
-            predictions_dict=predictions_dict,
-            save_path=visualizer.subdirs['comparison']
-        )
-        
-        # 3. 创建模型改进对比图
-        visualizer.plot_model_improvements(
-            baseline_metrics=baseline_metrics,
-            enhanced_metrics=enhanced_metrics,
-            save_path=visualizer.subdirs['comparison']
-        )
-        
-        # 4. 创建总体性能对比表格
-        visualizer.create_performance_table(
-            baseline_metrics=baseline_metrics,
-            enhanced_metrics=enhanced_metrics,
-            improvements=improvements,
-            save_path=visualizer.subdirs['metrics']
-        )
-        
-        # 生成特征名称
-        input_shape = enhanced_models.models['LSTM'].input_shape[-1]
-        feature_names = []
-        
-        # 生成基本特征名称
-        for i in range(config.DATA_CONFIG['sequence_length']):
-            feature_names.extend([
-                f'traffic_t-{i}',
-                f'temp_t-{i}',
-                f'precip_t-{i}',
-                f'wind_t-{i}',
-                f'humidity_t-{i}'
-            ])
-        
-        # 添加额外特征名称
-        feature_names.extend([
-            'hour_sin',
-            'hour_cos',
-            'day_sin',
-            'day_cos',
-            'is_weekend',
-            'is_holiday'
-        ])
-        
-        # 确保特征名称列表长度与输入维度匹配
-        if len(feature_names) < input_shape:
-            feature_names.extend([f'feature_{i}' for i in range(len(feature_names), input_shape)])
-        elif len(feature_names) > input_shape:
-            feature_names = feature_names[:input_shape]
-        
-        # 生成特征重要性分析
-        try:
-            importance_df = visualizer.plot_feature_importance_analysis(
-                model=enhanced_models.models['LSTM'],
-                feature_names=feature_names,
-                save_path=visualizer.subdirs['analysis']
-            )
-            if importance_df is not None:
-                logging.info(f"Top 5 most important features:\n{importance_df.head()}")
-        except Exception as e:
-            logging.error(f"Error in feature importance analysis: {str(e)}")
-
-        # 创建综合报告
-        visualizer.create_comprehensive_report(
-            baseline_metrics=baseline_metrics,
-            enhanced_metrics=enhanced_metrics,
-            weather_data=weather_data,
-            save_path=visualizer.subdirs['metrics']
-        )
-        
-        logging.info("所有模型的对比图和性能分析保存完成")
+        logging.info("可视化结果生成完成")
+        logging.info("\n" + "-"*30)
+        logging.info("实验全部完成")
+        logging.info("-"*30)
         
     except Exception as e:
-        logging.error(f"实验过程中出现错误: {str(e)}")
+        logging.error(f"\n实验过程中出现错误: {str(e)}")
+        logging.error("详细错误信息:", exc_info=True)
         raise
 
 if __name__ == '__main__':

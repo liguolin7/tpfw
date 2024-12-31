@@ -3,6 +3,8 @@ import os
 import tensorflow as tf
 import tensorflow.keras.optimizers.legacy as legacy_optimizers
 import importlib
+import numpy as np
+import random
 
 # 数据路径
 RAW_DATA_DIR = 'data/raw'
@@ -20,6 +22,33 @@ TEST_RATIO = 0.15    # 增加测试集比例
 
 # 全局随机种子
 RANDOM_SEED = 42
+
+def set_global_random_seed():
+    """设置全局随机种子，确保实验可复现"""
+    # Python内置random模块
+    random.seed(RANDOM_SEED)
+    
+    # Numpy
+    np.random.seed(RANDOM_SEED)
+    
+    # TensorFlow
+    tf.random.set_seed(RANDOM_SEED)
+    
+    # 设置TensorFlow的确定性操作
+    tf.keras.utils.set_random_seed(RANDOM_SEED)
+    
+    # 启用TensorFlow的确定性操作
+    tf.config.experimental.enable_op_determinism()
+    
+    # 设置Python的哈希种子
+    os.environ['PYTHONHASHSEED'] = str(RANDOM_SEED)
+    
+    # 设置TensorFlow的线程数，以减少不确定性
+    tf.config.threading.set_inter_op_parallelism_threads(1)
+    tf.config.threading.set_intra_op_parallelism_threads(1)
+
+# 在导入配置时就设置随机种子
+set_global_random_seed()
 
 # 创建一个配置类来存储训练参数
 class TrainingConfig:

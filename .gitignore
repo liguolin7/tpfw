@@ -35,9 +35,3 @@ data/processed/*.csv
 # Logs
 logs/
 *.log
-
-# Results
-results/figures/*
-results/metrics/*
-!results/figures/.gitkeep
-!results/metrics/.gitkeep

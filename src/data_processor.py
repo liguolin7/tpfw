@@ -184,24 +184,25 @@ class DataProcessor:
         
     def split_data(self, data):
         """分割数据集"""
+        # 设置随机种子
+        np.random.seed(RANDOM_SEED)
+        
         # 提取目标变量
         y = data['target']
         # 删除目标变量列
         X = data.drop('target', axis=1)
         
-        # 计算分割点
-        train_size = int(len(data) * 0.5)
-        val_size = int(len(data) * 0.25)
+        # 使用sklearn的train_test_split，并设置随机种子
+        X_train, X_temp, y_train, y_temp = train_test_split(
+            X, y, test_size=(1-TRAIN_RATIO), random_state=RANDOM_SEED
+        )
         
-        # 分割数据集
-        X_train = X[:train_size]
-        y_train = y[:train_size]
-        
-        X_val = X[train_size:train_size+val_size]
-        y_val = y[train_size:train_size+val_size]
-        
-        X_test = X[train_size+val_size:]
-        y_test = y[train_size+val_size:]
+        # 将剩余数据分为验证集和测试集
+        val_ratio_adjusted = VAL_RATIO / (1-TRAIN_RATIO)
+        X_val, X_test, y_val, y_test = train_test_split(
+            X_temp, y_temp, test_size=(TEST_RATIO/(TEST_RATIO+VAL_RATIO)),
+            random_state=RANDOM_SEED
+        )
         
         return X_train, X_val, X_test, y_train, y_val, y_test
         
@@ -266,6 +267,9 @@ class DataProcessor:
 
     def prepare_sequences(self, traffic_data, weather_data=None, sequence_length=12):
         """修改数据准备过程"""
+        # 设置随机种子
+        np.random.seed(RANDOM_SEED)
+        
         if weather_data is not None:
             # 预处理天气特征
             weather_data = self.preprocess_weather_features(weather_data)
