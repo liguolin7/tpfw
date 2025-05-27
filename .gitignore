@@ -23,6 +23,7 @@ ENV/
 # IDE
 .idea/
 .vscode/
+.cursor/
 
 # Model files
 *.h5
